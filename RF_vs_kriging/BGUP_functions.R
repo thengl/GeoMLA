@@ -29,7 +29,7 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
   } else {
     sel <- dismo::kfold(points@data, k=nfold)
   }
-  if(missing(cpus)){ 
+  if(missing(cpus)){
     cpus <- parallel::detectCores(all.tests = FALSE, logical = FALSE) 
   }
   if(cpus>1){
@@ -125,7 +125,7 @@ predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, N
     } else {
       x.vgm <- likfit(x.geo, lambda=0, messages=FALSE, ini=c(var(log1p(x.geo$data)), Range), cov.model="exponential")
       pred <- krige.conv(x.geo, locations=locs, krige=krige.control(obj.model=x.vgm))
-      sel.t = 1:length(pred$predictions)
+      sel.t = 1:length(pred$predict)
     }
     names(pred)[1] = "predictions"
     pred$se = sqrt(pred$krige.var)

@@ -89,6 +89,7 @@ cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="r
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
 cv.RF$Summary$R.squared; cv.OK$Summary$R.squared
 cv.RF$Summary$MAE.SE; cv.OK$Summary$MAE.SE
+sd(meuse$zinc)/sqrt(nrow(meuse))
 ## plot results
 library(lattice)
 require(gridExtra)
@@ -188,6 +189,7 @@ cv.RF2$Summary$R.squared; cv.UK$Summary$R.squared
 cv.RF2$Summary$MAE.SE; cv.UK$Summary$MAE.SE
 ## plot results
 library(lattice)
+library(scales)
 require(gridExtra)
 lim.rain = c(20,max(sic97.sp$rainfall, na.rm = TRUE))
 pdf(file = "Fig_correlation_plots_OK_RF_rain_SIC97.pdf", width=9, height=5)
