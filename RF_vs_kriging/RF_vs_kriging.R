@@ -16,6 +16,7 @@ library(randomForest)
 library(quantregForest)
 library(plotKML)
 library(scales)
+## to speed up computing of "se" in ranger use https://github.com/imbs-hl/ranger/pull/231
 library(ranger)
 library(RCurl)
 library(parallel)
@@ -68,7 +69,6 @@ meuse.grid$zinc_rfd = zinc.rfd$predictions
 meuse.grid$zinc_rfd_var = zinc.rfd$se
 
 ## Plot predictions next to each other:
-#png(file = "Fig_comparison_OK_RF_zinc_meuse.png", res = 150, width = 1750, height = 1200)
 var.max = max(c(meuse.grid$zinc_rfd_var, sqrt(meuse.grid$zinc_ok_var)))
 axis.ls = list(at=c(4.8,5.7,6.5,7.4), labels=round(expm1(c(4.8,5.7,6.5,7.4))))
 pdf(file = "Fig_comparison_OK_RF_zinc_meuse.pdf", width=9, height=9)
@@ -88,6 +88,7 @@ dev.off()
 cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="ranger", OK=TRUE, spcT=FALSE)
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
 cv.RF$Summary$R.squared; cv.OK$Summary$R.squared
+cv.RF$Summary$MAE.SE; cv.OK$Summary$MAE.SE
 ## plot results
 library(lattice)
 require(gridExtra)
@@ -151,6 +152,7 @@ plot(sqrt(raster(swiss1km["rainfall_UK_var"])))
 
 ## SIC 1997 Random Forest example ----
 swiss.dist0 <- buffer.dist(sic97.sp["rainfall"], swiss1km[1], as.factor(1:nrow(sic97.sp))) ## takes 2-3 mins
+## Deriving buffer distances is computationally very intensive
 ov.swiss = over(sic97.sp["rainfall"], swiss.dist0)
 sw.dn0 <- paste(names(swiss.dist0), collapse="+")
 sw.fm1 <- as.formula(paste("rainfall ~ ", sw.dn0, " + CHELSA_rainfall + DEM"))
@@ -158,7 +160,6 @@ ov.rain <- over(sic97.sp["rainfall"], swiss1km[1:2])
 sw.rm = do.call(cbind, list(sic97.sp@data["rainfall"], ov.rain, ov.swiss))
 m1.rain <- ranger::ranger(sw.fm1, sw.rm[complete.cases(sw.rm),], keep.inbag = TRUE, importance = "impurity")
 m1.rain
-## Predicting errors is computationally very intensive in ranger
 rain.rfd1 <- predict(m1.rain, cbind(swiss.dist0@data, swiss1km@data), type = "se")
 swiss1km$rainfall_rfd1 = rain.rfd1$predictions
 swiss1km$rainfall_rfd1_var = rain.rfd1$se
@@ -180,10 +181,11 @@ plot(raster(swiss1km["rainfall_rfd1_var"]), col=rev(bpy.colors()), main="Random 
 points(sic97.sp, pch="+")
 dev.off()
 
-## cross-validation (takes few minutes!!):
+## cross-validation (computationally intensive - takes few minutes!!):
 cv.RF2 = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="ranger", spcT=TRUE)
 cv.UK = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="geoR", spcT=FALSE)
-cv.RF2$Summary$R.squared; cv.OK$Summary$R.squared
+cv.RF2$Summary$R.squared; cv.UK$Summary$R.squared
+cv.RF2$Summary$MAE.SE; cv.UK$Summary$MAE.SE
 ## plot results
 library(lattice)
 require(gridExtra)
@@ -348,6 +350,8 @@ plot(raster(usa5km["MG_ICP40_rf"]), col=leg, main="Mg (wt%)", axes=FALSE, box=FA
 points(geochem[!is.na(geochem$MG_ICP40),], pch="+", cex=.5)
 dev.off()
 
+library(RCurl)
+library(rgdal)
 nl.rd <- getURL("http://spatialreference.org/ref/sr-org/6781/proj4/")
 ## Geul data set ----
 geul <- read.table("geul.dat", header = TRUE, as.is = TRUE)
@@ -360,6 +364,7 @@ grd25 <- as(grd25, "SpatialPixelsDataFrame")
 proj4string(grd25) = proj4string(geul) 
 
 ## Pb predicted using OK
+library(geoR)
 pb.geo <- as.geodata(geul["pb"])
 pb.vgm <- likfit(pb.geo, lambda=0, messages=FALSE, ini=c(var(log1p(pb.geo$data)),500), cov.model="exponential")
 locs2 = grd25@coords

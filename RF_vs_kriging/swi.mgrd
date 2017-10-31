@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SAGA_METADATA>
+  <HISTORY saga-version="2.2.7">
+    <MODULE library="ta_hydrology" id="15" name="SAGA Wetness Index">
+      <OPTION type="grid_system" id="PARAMETERS_GRID_SYSTEM" name="Grid system">
+        <CELLSIZE>25</CELLSIZE>
+        <XMIN>190212.5</XMIN>
+        <XMAX>191287.5</XMAX>
+        <YMIN>314312.5</YMIN>
+        <YMAX>315587.5</YMAX>
+      </OPTION>
+      <OPTION type="double" id="SUCTION" name="Suction">10.000000</OPTION>
+      <OPTION type="choice" id="AREA_TYPE" name="Type of Area" index="1">square root of catchment area</OPTION>
+      <OPTION type="choice" id="SLOPE_TYPE" name="Type of Slope" index="1">catchment slope</OPTION>
+      <OPTION type="double" id="SLOPE_MIN" name="Minimum Slope">0.000000</OPTION>
+      <OPTION type="double" id="SLOPE_OFF" name="Offset Slope">0.100000</OPTION>
+      <OPTION type="double" id="SLOPE_WEIGHT" name="Slope Weighting">1.000000</OPTION>
+      <INPUT type="grid" id="DEM" name="Elevation" system="PARAMETERS_GRID_SYSTEM">
+        <FILE>dem.sgrd</FILE>
+      </INPUT>
+      <OUTPUT type="grid" id="TWI" name="Topographic Wetness Index">Topographic Wetness Index</OUTPUT>
+    </MODULE>
+  </HISTORY>
+  <SOURCE>
+    <FILE>swi.sgrd</FILE>
+    <DATABASE></DATABASE>
+    <PROJECTION>
+      <OGC_WKT>PROJCS["Double_Stereographic",GEOGCS["GCS_Bessel 1841",DATUM["D_unknown",SPHEROID["bessel",6377397.155,299.1528128]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]],PROJECTION["Double_Stereographic"],PARAMETER["latitude_of_origin",52.15616055555555],PARAMETER["central_meridian",5.38763888888889],PARAMETER["scale_factor",0.9999079],PARAMETER["false_easting",155000],PARAMETER["false_northing",463000],UNIT["Meter",1]]
+</OGC_WKT>
+      <PROJ4></PROJ4>
+      <EPSG>-1</EPSG>
+    </PROJECTION>
+  </SOURCE>
+  <DESCRIPTION></DESCRIPTION>
+</SAGA_METADATA>

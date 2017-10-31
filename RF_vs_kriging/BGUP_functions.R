@@ -21,7 +21,7 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
     idcol = "SOURCEID"
   }
   message(paste("Running ", nfold, "-fold cross validation with model re-fitting method ", method," ...", sep=""))
-  if(nfold > nrow(rmatrix)){ 
+  if(nfold > nrow(points@data)){ 
     stop("'nfold' argument must not exceed total number of points") 
   }
   if(sum(duplicated(points@data[,idcol]))>0.5*nrow(points@data)){
@@ -113,7 +113,7 @@ predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, N
     locs = s.test@coords
     if(OK==FALSE){
       ## add covariates:
-      x.geo$covariate = over(s.train[sel.d,varn], covs)
+      x.geo$covariate = over(x=s.train[sel.d,varn], y=covs)
       t = as.formula(paste(" ~ ", paste(names(covs), collapse = "+")))
       x.vgm <- likfit(x.geo, trend = t, ini=c(var(log1p(x.geo$data)), Range), fix.psiA = FALSE, fix.psiR = FALSE)
       ov0 = over(s.test[varn], covs)
