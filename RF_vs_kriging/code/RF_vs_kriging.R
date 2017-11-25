@@ -6,8 +6,9 @@ list.of.packages <- c("plyr", "parallel", "randomForest", "quantregForest", "plo
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, dependencies = TRUE)
 
-setwd("~/git/GeoMLA/RF_vs_kriging")
-load(".RData")
+# setwd("~/git/GeoMLA/RF_vs_kriging")
+setwd("~/projects/GeoMLA/RF_vs_kriging")
+# load(".RData")
 library(GSIF)
 library(rgdal)
 library(raster)
@@ -23,7 +24,7 @@ library(parallel)
 library(geoR)
 #library(geostatsp)
 leg = c("#0000ff", "#0028d7", "#0050af", "#007986", "#00a15e", "#00ca35", "#00f20d", "#1aff00", "#43ff00", "#6bff00", "#94ff00", "#bcff00", "#e5ff00", "#fff200", "#ffca00", "#ffa100", "#ff7900", "#ff5000", "#ff2800", "#ff0000")
-source('BGUP_functions.R')
+source('code/BGUP_functions.R')
 
 ## Load the Meuse data set:
 demo(meuse, echo=FALSE)
@@ -40,7 +41,7 @@ meuse.grid$rf.zinc <- predict(rf, meuse.grid@data)[,2]
 
 ## Plot predictions next to each other:
 meuse.grid$glm.zinc = ifelse(meuse.grid$glm.zinc<expm1(4.8), expm1(4.8), meuse.grid$glm.zinc)
-png(file = "Fig_comparison_GLM_RF_zinc_meuse.png", res = 150, width = 1750, height = 1200)
+png(file = "results/meuse/Fig_comparison_GLM_RF_zinc_meuse.png", res = 150, width = 1750, height = 1200)
 par(mfrow=c(1,2), oma=c(0,0,0,0))
 plot(log1p(raster(meuse.grid["glm.zinc"])), col=leg, zlim=c(4.8,7.4), main="GLM")
 points(meuse, pch="+")
@@ -71,7 +72,7 @@ meuse.grid$zinc_rfd_var = zinc.rfd$se
 ## Plot predictions next to each other:
 var.max = max(c(meuse.grid$zinc_rfd_var, sqrt(meuse.grid$zinc_ok_var)))
 axis.ls = list(at=c(4.8,5.7,6.5,7.4), labels=round(expm1(c(4.8,5.7,6.5,7.4))))
-pdf(file = "Fig_comparison_OK_RF_zinc_meuse.pdf", width=9, height=9)
+pdf(file = "results/meuse/Fig_comparison_OK_RF_zinc_meuse.pdf", width=9, height=9)
 par(mfrow=c(2,2), oma=c(0,0,0,1), mar=c(0,0,4,3))
 plot(log1p(raster(meuse.grid["zinc_ok"])), col=leg, zlim=c(4.8,7.4), main="Ordinary Kriging (OK)", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
@@ -94,7 +95,7 @@ sd(meuse$zinc)/sqrt(nrow(meuse))
 library(lattice)
 require(gridExtra)
 lim.zinc = range(meuse$zinc, na.rm = TRUE)
-pdf(file = "Fig_correlation_plots_OK_RF_zinc_meuse.pdf", width=9, height=5)
+pdf(file = "results/meuse/Fig_correlation_plots_OK_RF_zinc_meuse.pdf", width=9, height=5)
 par(oma=c(0,0,0,1), mar=c(0,0,0,2))
 plt.RF = xyplot(cv.RF[[1]]$Predicted~cv.RF[[1]]$Observed, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), xlab="measured", ylab="predicted (machine learning)", panel = pfun.line, xlim=lim.zinc, ylim=lim.zinc)
 plt.OK = xyplot(cv.OK[[1]]$Predicted~cv.OK[[1]]$Observed, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), xlab="measured", ylab="predicted (geoR)", panel = pfun.line, xlim=lim.zinc, ylim=lim.zinc)
@@ -102,9 +103,9 @@ grid.arrange(plt.OK, plt.RF, ncol=2)
 dev.off()
 
 ## RF with combined covariates ----
-meuse.grid$SW_occurrence = readGDAL("Meuse_GlobalSurfaceWater_occurrence.tif")$band1[meuse.grid@grid.index]
-meuse.grid$AHN = readGDAL("ahn.asc")$band1[meuse.grid@grid.index]
-meuse.grid$LGN5 = as.factor(readGDAL("lgn5.asc")$band1[meuse.grid@grid.index])
+meuse.grid$SW_occurrence = readGDAL("data/meuse/Meuse_GlobalSurfaceWater_occurrence.tif")$band1[meuse.grid@grid.index]
+meuse.grid$AHN = readGDAL("data/meuse/ahn.asc")$band1[meuse.grid@grid.index]
+meuse.grid$LGN5 = as.factor(readGDAL("data/meuse/lgn5.asc")$band1[meuse.grid@grid.index])
 grids.spc = spc(meuse.grid, as.formula("~ SW_occurrence + AHN + ffreq + dist"))
 ## fit hybrid RF model:
 fm1 <- as.formula(paste("zinc ~ ", dn0, " + ", paste(names(grids.spc@predicted), collapse = "+")))
@@ -120,7 +121,7 @@ m2.zinc <- ranger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = 
 m2.zinc
 meuse.grid$zinc_rfd2 = predict(m2.zinc, grids.spc@predicted@data)$predictions
 
-pdf(file = "Fig_RF_covs_bufferdist_zinc_meuse.pdf", width=9, height=5)
+pdf(file = "results/meuse/Fig_RF_covs_bufferdist_zinc_meuse.pdf", width=9, height=5)
 par(mfrow=c(1,2), oma=c(0,0,0,1), mar=c(0,0,4,3))
 plot(log1p(raster(meuse.grid["zinc_rfd2"])), col=leg, zlim=c(4.8,7.4), main="Random Forest (RF) covs only", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
@@ -130,8 +131,8 @@ dev.off()
 
 ## SIC 1997 data set ----
 ## measurements made in Switzerland on the 8th of May 1986
-sic97.sp = readRDS("sic97.rds")
-swiss1km = readRDS("swiss1km.rds")
+sic97.sp = readRDS("data/rainfall/sic97.rds")
+swiss1km = readRDS("data/rainfall/swiss1km.rds")
 ov2 = over(y=swiss1km, x=sic97.sp)
 sel.d = which(!is.na(ov2$DEM))
 #plot(stack(swiss1km[1:2]))
@@ -170,7 +171,7 @@ print(t(data.frame(xl1[order(unlist(xl1), decreasing=TRUE)[1:15]])))
 rain.max = max(swiss1km$rainfall_rfd1, na.rm = TRUE)
 swiss1km$rainfall_UK = ifelse(swiss1km$rainfall_UK<0, 0, ifelse(swiss1km$rainfall_UK>rain.max, rain.max, swiss1km$rainfall_UK))
 ## Plot predictions next to each other:
-pdf(file = "Fig_Swiss_rainfall_UK_vs_RF.pdf", width=12, height=8)
+pdf(file = "results/rainfall/Fig_Swiss_rainfall_UK_vs_RF.pdf", width=12, height=8)
 par(mfrow=c(2,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
 plot(raster(swiss1km["rainfall_UK"]), col=leg, main="Universal kriging (UK)", axes=FALSE, box=FALSE, zlim=c(0, rain.max))
 points(sic97.sp, pch="+")
@@ -192,7 +193,7 @@ library(lattice)
 library(scales)
 require(gridExtra)
 lim.rain = c(20,max(sic97.sp$rainfall, na.rm = TRUE))
-pdf(file = "Fig_correlation_plots_OK_RF_rain_SIC97.pdf", width=9, height=5)
+pdf(file = "results/rainfall/Fig_correlation_plots_OK_RF_rain_SIC97.pdf", width=9, height=5)
 par(oma=c(0,0,0,1), mar=c(0,0,0,2))
 plt.RF2 = xyplot(cv.RF2[[1]]$Predicted~cv.RF2[[1]]$Observed, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), xlab="measured", ylab="predicted (machine learning)", panel = pfun.line, xlim=lim.rain, ylim=lim.rain)
 plt.UK = xyplot(cv.UK[[1]]$Predicted~cv.UK[[1]]$Observed, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), xlab="measured", ylab="predicted (geoR)", panel = pfun.line, xlim=lim.rain, ylim=lim.rain)
@@ -239,7 +240,7 @@ eberg_grid$Parabraunerde_FALSE = pr.Parabraunerde$predictions[,1]
 library(entropy)
 eberg_grid$SSE = entropy_index(eberg_grid@data[,c("Parabraunerde_TRUE","Parabraunerde_FALSE")])
 
-pdf(file = "Fig_Parabraunerde_RF.pdf", width=7, height=6.5)
+pdf(file = "results/eberg/Fig_Parabraunerde_RF.pdf", width=7, height=6.5)
 #par(mfrow=c(1,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
 par(oma=c(0,0,0,0.5), mar=c(0,0,3.5,1))
 plot(raster(eberg_grid["Parabraunerde_TRUE"]), col=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,1), main="Parabraunerde class (RF)", axes=FALSE, box=FALSE)
@@ -258,7 +259,7 @@ coordinates(eberg) <- ~X+Y
 proj4string(eberg) <- CRS("+init=epsg:31467")
 ## Fit model and predict at once:
 soiltype <- autopredict(eberg["TAXGRSC"], eberg_grid, auto.plot=FALSE)
-pdf("Fig_ebergotzen_TAXGRSC.pdf", width=10, height=6.7)
+pdf("results/eberg/Fig_ebergotzen_TAXGRSC.pdf", width=10, height=6.7)
 plot(stack(soiltype$predicted), col=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,100))
 dev.off()
 
@@ -277,15 +278,15 @@ plot(eberg_grid["SSE_t"], col=rev(bpy.colors()), zlim=c(0,100))
 points(eberg[sel.eberg,"TAXGRSC"], pch="+", cex=.6)
 
 shape = "http://maps.google.com/mapfiles/kml/pal2/icon18.png" 
-kml(eberg, colour = TAXGRSC, file.name="eberg_TAXGRSC.kml", shape=shape, points_names=eberg$TAXGRSC, LabelScale = .9)
-kml(raster(r.G), folder.name="Gley", raster_name="eberg_Gley.png", file.name="eberg_Gley.kml", colour_scale=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,40), png.type="cairo")
-kml(raster(r.P), folder.name="Parabraunerde", raster_name="eberg_Parabraunerde.png", file.name="eberg_Parabraunerde.kml", colour_scale=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,40), png.type="cairo")
-kml(eberg_grid["SSE_t"], folder.name="SSE", raster_name="eberg_SEE.png", file.name="eberg_SEE.kml", colour_scale=rev(bpy.colors()), zlim=c(0,100), png.type="cairo")
+kml(eberg, colour = TAXGRSC, file.name="results/eberg/eberg_TAXGRSC.kml", shape=shape, points_names=eberg$TAXGRSC, LabelScale = .9)
+kml(raster(r.G), folder.name="Gley", raster_name="results/eberg/eberg_Gley.png", file.name="results/eberg/eberg_Gley.kml", colour_scale=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,40), png.type="cairo")
+kml(raster(r.P), folder.name="Parabraunerde", raster_name="results/eberg/eberg_Parabraunerde.png", file.name="results/eberg/eberg_Parabraunerde.kml", colour_scale=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,40), png.type="cairo")
+kml(eberg_grid["SSE_t"], folder.name="SSE", raster_name="results/eberg/eberg_SEE.png", file.name="results/eberg/eberg_SEE.kml", colour_scale=rev(bpy.colors()), zlim=c(0,100), png.type="cairo")
 ## Conclusion: looks like regression-kriging on class probs
 
 ## Multivariate case ----
 ## Geochemicals USA (https://mrdata.usgs.gov/geochem/)
-geochem = readRDS("geochem.rds")
+geochem = readRDS("data/geochem/geochem.rds")
 ## negative values are in fact detection limits:
 for(i in c("PB_ICP40","CU_ICP40","K_ICP40","MG_ICP40")) { geochem[,i] = ifelse(geochem[,i] < 0, abs(geochem[,i])/2, geochem[,i])  }
 coordinates(geochem) = ~coords.x1 + coords.x2
@@ -297,7 +298,7 @@ bubble(geochem[!is.na(geochem$MG_ICP40),"MG_ICP40"])
 geochem$TYPEDESC = as.factor(paste(geochem$TYPEDESC))
 summary(geochem$TYPEDESC)
 #writeOGR(geochem, "geochem.shp", "geochem", "ESRI Shapefile")
-usa5km = readRDS("usa5km.rds")
+usa5km = readRDS("data/geochem/usa5km.rds")
 str(usa5km@data)
 geochem = spTransform(geochem, CRS(proj4string(usa5km)))
 usa5km.spc = spc(usa5km, ~geomap+globedem+dTRI+nlights03+dairp+sdroads)
@@ -340,7 +341,7 @@ for(i in t.vars){
 }
 
 ## Plot predictions next to each other:
-pdf(file = "Fig_NGS_elements_RF.pdf", width=7.5, height=7)
+pdf(file = "results/geochem/Fig_NGS_elements_RF.pdf", width=7.5, height=7)
 par(mfrow=c(2,2), oma=c(0,0,0,0.5), mar=c(0,0,2.5,2))
 plot(raster(usa5km["PB_ICP40_rf"]), col=leg, main="Pb (ppm)", axes=FALSE, box=FALSE)
 points(geochem[!is.na(geochem$PB_ICP40),], pch="+", cex=.5)
@@ -356,12 +357,12 @@ library(RCurl)
 library(rgdal)
 nl.rd <- getURL("http://spatialreference.org/ref/sr-org/6781/proj4/")
 ## Geul data set ----
-geul <- read.table("geul.dat", header = TRUE, as.is = TRUE)
+geul <- read.table("data/geul/geul.dat", header = TRUE, as.is = TRUE)
 geul$pb = as.numeric(geul$pb)
 geul = geul[!is.na(geul$pb),]
 coordinates(geul) <- ~x+y
 proj4string(geul) <- CRS(nl.rd) 
-grd25 <- readGDAL("dem25.txt")
+grd25 <- readGDAL("data/geul/dem25.txt")
 grd25 <- as(grd25, "SpatialPixelsDataFrame")
 proj4string(grd25) = proj4string(geul) 
 
@@ -384,7 +385,7 @@ rk.m1 <- predict(m1, grid.dist1)
 
 ## Plot predictions next to each other:
 grd25$pb_ok = ifelse(grd25$pb_ok<expm1(4.2), expm1(4.2), grd25$pb_ok)
-png(file = "Fig_comparison_OK_RF_Pb_Geul.png", res = 150, width = 1750, height = 1200)
+png(file = "results/geul/Fig_comparison_OK_RF_Pb_Geul.png", res = 150, width = 1750, height = 1200)
 par(mfrow=c(1,2), oma=c(0,0,0,0))
 plot(log1p(raster(grd25["pb_ok"])), col=leg, zlim=c(4.2,6.6), main="geoR (krige.conv)")
 points(geul.s, pch="+")
@@ -393,8 +394,8 @@ points(geul.s, pch="+")
 dev.off()
 
 ## RF with both buffer dist and covariates ----
-grd25$swi <- readGDAL("swi.sdat")$band1[grd25@grid.index]
-grd25$dis <- readGDAL("riverdist.txt")$band1[grd25@grid.index]
+grd25$swi <- readGDAL("data/geul/swi.sdat")$band1[grd25@grid.index]
+grd25$dis <- readGDAL("data/geul/riverdist.txt")$band1[grd25@grid.index]
 plot(stack(grd25))
 grd25T <- grd25[c("band1","swi","dis")]
 grd25T@data <- cbind(grd25T@data, grid.dist1@data)
@@ -407,13 +408,14 @@ plot(m2)
 dev.off()
 rk.m2 <- predict(m2, grd25.spc@predicted)
 #plot(rk.m2, col=leg)
-varImpPlot(m1@regModel)
+# varImpPlot(m1@regModel)
 
 rk.m2@predicted$pb = ifelse(rk.m2@predicted$pb<expm1(4.2), expm1(4.2), rk.m2@predicted$pb)
-png(file = "Fig_comparison_RF_covariates_Pb_Geul.png", res = 150, width = 1750, height = 1200)
+png(file = "results/geul/Fig_comparison_RF_covariates_Pb_Geul.png", res = 150, width = 1750, height = 1200)
 par(mfrow=c(1,2), oma=c(0,0,0,0))
 plot(log1p(raster(rk.m2@predicted[2])), col=leg, zlim=c(4.2,6.6), main="Random Forest + covs")
 points(geul.s, pch="+")
 plot(log1p(raster(rk.m1@predicted[2])), col=leg, zlim=c(4.2,6.6), main="Random Forest")
 points(geul.s, pch="+")
 dev.off()
+

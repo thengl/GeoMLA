@@ -2,7 +2,7 @@
 laea.prj = "+proj=laea +lat_0=46.95240555555556 +lon_0=7.439583333333333 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
 ch.prj = "+proj=somerc +lat_0=46.95240555555556 +lon_0=7.439583333333333 +k_0=1 +x_0=600000 +y_0=200000 +ellps=bessel +towgs84=674.4,15.1,405.3,0,0,0,0 +units=m +no_defs"
 
-ch.st = read.csv("CH_stations.csv")
+ch.st = read.csv("data/rainfall/CH_stations.csv")
 coordinates(ch.st) = ~ X+Y
 proj4string(ch.st) = ch.prj
 shape = "http://maps.google.com/mapfiles/kml/pal2/icon18.png" 
@@ -41,13 +41,13 @@ ch.dem = reproject(swissAltitude, laea.prj)
 ch.pol = spTransform(swissBorder, CRS(laea.prj))
 system(paste0('gdalwarp /mnt/cartman/MERIT/MERIT_100m.vrt swissDEM.tif -t_srs \"', laea.prj,'\" -te -133321.8 -153663.2 259108.2 123836.8 -tr 1000 1000 -co \"COMPRESS=DEFLATE\"'))
 system(paste0('gdalwarp /mnt/cartman/CHELSA/CHELSA_prec_5_V1.2_land.tif swissChelsa_May.tif -t_srs \"', laea.prj,'\" -te -133321.8 -153663.2 259108.2 123836.8 -tr 1000 1000 -co \"COMPRESS=DEFLATE\"'))
-ch1km = readGDAL("swissChelsa_May.tif")
-ch1km$DEM = readGDAL("swissDEM.tif")$band1
+ch1km = readGDAL("data/rainfall/swissChelsa_May.tif")
+ch1km$DEM = readGDAL("data/rainfall/swissDEM.tif")$band1
 ch.bor = rasterize(ch.pol, raster(ch1km))
 ch1km$border = as(ch.bor, "SpatialGridDataFrame")$NAME_ENGLISH
 ch1km = as(ch1km, "SpatialPixelsDataFrame")
 ch1km = ch1km[!is.na(ch1km$border),]
 str(ch1km@data)
 names(ch1km)[1] = "CHELSA_rainfall"
-saveRDS(ch1km, "swiss1km.rds")
-saveRDS(sic97.sp, "sic97.rds")
+saveRDS(ch1km, "data/rainfall/swiss1km.rds")
+saveRDS(sic97.sp, "data/rainfall/sic97.rds")
