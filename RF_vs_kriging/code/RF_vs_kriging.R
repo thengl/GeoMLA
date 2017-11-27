@@ -33,6 +33,7 @@ demo(meuse, echo=FALSE)
 m <- glm(zinc~log1p(dist)+ffreq, meuse, family=gaussian(link=log))
 plot(m$fitted.values~m$y, asp=1)
 abline(0,1)
+set.seed(1)
 rf <- quantregForest(x=meuse@data[,c("dist","ffreq")], y=meuse$zinc)
 plot(rf$predicted~rf$y, asp=1)
 abline(0,1)
@@ -69,18 +70,31 @@ zinc.rfd <- predict(m.zinc, grid.dist0@data, type = "se")
 meuse.grid$zinc_rfd = zinc.rfd$predictions
 meuse.grid$zinc_rfd_var = zinc.rfd$se
 
+## Zinc predicted using RF and coordinates as covariates only ----
+fmc <- zinc ~ x + y
+set.seed(1)
+m.zinc.coords <- ranger(fmc, cbind(meuse@data["zinc"], meuse@coords), keep.inbag = TRUE)
+zinc.rfc <- predict(m.zinc.coords, meuse.grid@coords, type = "se")
+meuse.grid$zinc_rfc = zinc.rfc$predictions
+meuse.grid$zinc_rfc_var = zinc.rfc$se
+
+
 ## Plot predictions next to each other:
 var.max = max(c(meuse.grid$zinc_rfd_var, sqrt(meuse.grid$zinc_ok_var)))
 axis.ls = list(at=c(4.8,5.7,6.5,7.4), labels=round(expm1(c(4.8,5.7,6.5,7.4))))
 pdf(file = "results/meuse/Fig_comparison_OK_RF_zinc_meuse.pdf", width=9, height=9)
-par(mfrow=c(2,2), oma=c(0,0,0,1), mar=c(0,0,4,3))
+par(mfrow=c(2,3), oma=c(0,0,0,1), mar=c(0,0,4,3))
 plot(log1p(raster(meuse.grid["zinc_ok"])), col=leg, zlim=c(4.8,7.4), main="Ordinary Kriging (OK)", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
-plot(log1p(raster(meuse.grid["zinc_rfd"])), col=leg, zlim=c(4.8,7.4), main="Random Forest (RF)", axes=FALSE, box=FALSE, axis.args=axis.ls)
+plot(log1p(raster(meuse.grid["zinc_rfd"])), col=leg, zlim=c(4.8,7.4), main="Random Forest (RF), buffers", axes=FALSE, box=FALSE, axis.args=axis.ls)
+points(meuse, pch="+")
+plot(log1p(raster(meuse.grid["zinc_rfc"])), col=leg, zlim=c(4.8,7.4), main="Random Forest (RF), coordinates", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
 plot(sqrt(raster(meuse.grid["zinc_ok_var"])), col=rev(bpy.colors()), zlim=c(0,var.max), main="OK prediction error", axes=FALSE, box=FALSE)
 points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfd_var"]), col=rev(bpy.colors()), zlim=c(0,var.max), main="RF prediction error", axes=FALSE, box=FALSE)
+plot(raster(meuse.grid["zinc_rfd_var"]), col=rev(bpy.colors()), zlim=c(0,var.max), main="RF prediction error, buffers", axes=FALSE, box=FALSE)
+points(meuse, pch="+")
+plot(raster(meuse.grid["zinc_rfc_var"]), col=rev(bpy.colors()), zlim=c(0,var.max), main="RF prediction error, coords", axes=FALSE, box=FALSE)
 points(meuse, pch="+")
 dev.off()
 ## TH: RF smooths somewhat more than OK
@@ -128,6 +142,12 @@ points(meuse, pch="+")
 plot(log1p(raster(meuse.grid["zinc_rfd1"])), col=leg, zlim=c(4.8,7.4), main="Random Forest (RF) covs + buffer dist.", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
 dev.off()
+
+# Covariate importance
+xl <- as.list(ranger::importance(m1.zinc))
+print(t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[1:10]])))
+
+
 
 ## SIC 1997 data set ----
 ## measurements made in Switzerland on the 8th of May 1986
