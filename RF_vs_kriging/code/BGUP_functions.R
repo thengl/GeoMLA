@@ -25,16 +25,30 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
     stop("'nfold' argument must not exceed total number of points") 
   }
   if(sum(duplicated(points@data[,idcol]))>0.5*nrow(points@data)){
+    ##>> MN: K-fold for duplicated ----
+    # This assings the sets diffently, if there are duplicated row names. 
+    # 1) Would it not be better to check for duplicated locations (coordinates)? 
+    #    They do not necesseraly need to have the same row.names
+    # 2) The by-argument uses the sub-groups to assign each sub-group equaly to 
+    #    each k-set. This is not desirable as cross validation would become overly 
+    #    optimistic. It would be better to assign duplicates to the same set to have 
+    #    true independent subsets. 
     sel <- dismo::kfold(points@data, k=nfold, by=points@data[,idcol])
   } else {
     sel <- dismo::kfold(points@data, k=nfold)
   }
   if(missing(cpus)){
+    ##>> MN: cores detection ----
+    # Why logical = FALSE, I would want to use all cpus, even if they are just
+    # multithreaded (software sees multithreaded cores as if they were hardware) 
     cpus <- parallel::detectCores(all.tests = FALSE, logical = FALSE) 
   }
   if(cpus>1){
     require(snowfall)
     snowfall::sfInit(parallel=TRUE, cpus=ifelse(nfold>cpus, cpus, nfold))
+    ##>> MN: snowfall variable export ----
+    # Nsub is not specified befor this line, does it need to be 
+    # exported / specified before / handend down as argument from the cv_numeric-function?
     snowfall::sfExport("predict_parallelP","idcol","points","covs","sel","varn","method","Nsub","OK","spcT")
     snowfall::sfLibrary(package="plyr", character.only=TRUE)
     snowfall::sfLibrary(package="GSIF", character.only=TRUE)
@@ -51,16 +65,29 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
   }
   ## calculate mean accuracy:
   out <- plyr::rbind.fill(out)
-  ME = mean(out$Observed - out$Predicted, na.rm=TRUE) 
+  ME = mean(out$Observed - out$Predicted, na.rm=TRUE)
+  ##>> MN: MAE - MAD ----
+  # maybe remove, MAE is not in the paper. Or better use MADE median absolute 
+  # deviation error
   MAE = mean(abs(out$Observed - out$Predicted), na.rm=TRUE)
   RMSE = sqrt(mean((out$Observed - out$Predicted)^2, na.rm=TRUE))
   ## Errors of errors:
+  ##>> MN: error measure: ----
+  # see comments in manuscript and maybe change. 
   MAE.SE = mean(abs(out$Observed - out$Predicted)-out$SE, na.rm=TRUE)
   ## https://en.wikipedia.org/wiki/Coefficient_of_determination
+  ## >> MN: R2: Remove the the commeted R.squared line, it would be correct with:
+  ## 1-sum(( (out$Observed - out$Predicted) - mean(out$Observed - out$Predicted) )^2)/(var(out$Observed, na.rm=TRUE)*(sum(!is.na(out$Observed))-1))
   #R.squared = 1-sum((out$Observed - out$Predicted)^2, na.rm=TRUE)/(var(out$Observed, na.rm=TRUE)*sum(!is.na(out$Observed)))
   R.squared = 1-var(out$Observed - out$Predicted, na.rm=TRUE)/var(out$Observed, na.rm=TRUE)
   if(Log==TRUE){
     ## If the variable is log-normal then logR.squared is probably more correct
+    ##>> MN: logRMSE ----
+    # you mention the unbiased backtransform in the paper (Eq. 12 and 13), 
+    # predictions on logscale are then not achieved by log1p(out$Predicted)
+    # Moreover, I do not know if logRMSE, logR2 should be preferred, maybe rather report both
+    # or just backtransfored (In the end most people would prefer to know model 
+    # performance on original scale not on rather abstract logscale). 
     logRMSE = sqrt(mean((log1p(out$Observed) - log1p(out$Predicted))^2, na.rm=TRUE))
     #logR.squared = 1-sum((log1p(out$Observed) - log1p(out$Predicted))^2, na.rm=TRUE)/(var(log1p(out$Observed), na.rm=TRUE)*sum(!is.na(out$Observed)))
     logR.squared = 1-var(log1p(out$Observed) - log1p(out$Predicted), na.rm=TRUE)/var(log1p(out$Observed), na.rm=TRUE)
@@ -73,18 +100,28 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
 }
 
 predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, Nsub=1e4, OK=FALSE, spcT=TRUE){ 
+  ##>> MN: function parameters-----
+  # somehow the parameter set that is specified here and called in RF_vs_kriging.R is a bit odd. 
+  # For method == "geoR" spcT has no meaning, the same for method == "ranger" & OK = T
+  # 
   s.train <- points[!sel==j,]
   s.test <- points[sel==j,]
+  ##>> MN: Nsub can never go missing, it is prespecified. ----
+  # then, if it was, formulaString is not specified / handed over. 
   if(missing(Nsub)){ Nsub = length(all.vars(formulaString))*50 }
   if(!Nsub>nrow(s.train)){ 
     s.train = s.train[sample.int(nrow(s.train), Nsub),]
   }
   if(method=="ranger"){
+    ##>> MN: could perhaps be de-dublicated on coordinates, as you also do that before kfold
     dist0 <- GSIF::buffer.dist(s.train[varn], covs, as.factor(1:nrow(s.train)))
     dn0 <- paste(names(dist0), collapse="+")
     ovT <- over(s.train[varn], dist0)
     ovV <- over(s.test[varn], dist0)
   }
+  ##>> MN: hmm, maybe I don't get meaning of the OK parameter. ----
+  # for method != "ranger" and OK = FALSE "dn0" will be missing. 
+  # resp. the if(method == ranger) should go around here as well. 
   if(OK==FALSE){
     if(spcT==TRUE){
       covs = GSIF::spc(covs, as.formula(paste0("~ ", paste(names(covs), collapse = "+"))))@predicted
