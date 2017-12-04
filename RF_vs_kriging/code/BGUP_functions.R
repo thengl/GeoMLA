@@ -14,7 +14,7 @@ pfun.line <- function(x,y, ...){
   panel.abline(0,1,lty=2,lw=1,col="black")
 }
 
-cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus=1, Nsub=1e4, OK=FALSE, spcT=TRUE, Log=FALSE){
+cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus=1, Nsub=1e4, OK=FALSE, spcT=TRUE, Log=FALSE, LLO=TRUE, pars.ranger){
   points = points[!is.na(points@data[,varn]),]
   if(missing(idcol)) { 
     points$SOURCEID = row.names(points@data)
@@ -25,43 +25,41 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
     stop("'nfold' argument must not exceed total number of points") 
   }
   if(sum(duplicated(points@data[,idcol]))>0.5*nrow(points@data)){
-    ##>> MN: K-fold for duplicated ----
-    # This assings the sets diffently, if there are duplicated row names. 
-    # 1) Would it not be better to check for duplicated locations (coordinates)? 
-    #    They do not necesseraly need to have the same row.names
-    # 2) The by-argument uses the sub-groups to assign each sub-group equaly to 
-    #    each k-set. This is not desirable as cross validation would become overly 
-    #    optimistic. It would be better to assign duplicates to the same set to have 
-    #    true independent subsets. 
-    sel <- dismo::kfold(points@data, k=nfold, by=points@data[,idcol])
+    if(LLO==TRUE){
+      ## TH: Leave whole locations out
+      ul <- unique(points@data[,idcol])
+      sel.ul <- dismo::kfold(ul, k=nfold)
+      sel <- lapply(1:nfold, function(o){ data.frame(row.names=which(points@data[,idcol] %in% ul[sel.ul==o]), x=rep(o, length(which(points@data[,idcol] %in% ul[sel.ul==o])))) })
+      sel <- do.call(rbind, sel)
+      sel <- sel[order(as.numeric(row.names(sel))),]
+      message(paste0("Subsetting observations by unique location"))
+    } else {
+      sel <- dismo::kfold(points@data, k=nfold, by=points@data[,idcol])
+      message(paste0("Subsetting observations by '", idcol, "'"))
+    }
   } else {
     sel <- dismo::kfold(points@data, k=nfold)
+    message(paste0("Simple subsetting of observations using kfolds"))
   }
   if(missing(cpus)){
-    ##>> MN: cores detection ----
-    # Why logical = FALSE, I would want to use all cpus, even if they are just
-    # multithreaded (software sees multithreaded cores as if they were hardware) 
-    cpus <- parallel::detectCores(all.tests = FALSE, logical = FALSE) 
+    cpus <- parallel::detectCores() 
   }
   if(cpus>1){
     require(snowfall)
     snowfall::sfInit(parallel=TRUE, cpus=ifelse(nfold>cpus, cpus, nfold))
-    ##>> MN: snowfall variable export ----
-    # Nsub is not specified befor this line, does it need to be 
-    # exported / specified before / handend down as argument from the cv_numeric-function?
-    snowfall::sfExport("predict_parallelP","idcol","points","covs","sel","varn","method","Nsub","OK","spcT")
+    snowfall::sfExport("predict_parallelP","idcol","points","covs","sel","varn","method","Nsub","OK","spcT","pars.ranger")
     snowfall::sfLibrary(package="plyr", character.only=TRUE)
     snowfall::sfLibrary(package="GSIF", character.only=TRUE)
     if(method=="ranger"){
       snowfall::sfLibrary(package="ranger", character.only=TRUE)
-      out <- snowfall::sfLapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT)})
+      out <- snowfall::sfLapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT, pars.ranger=pars.ranger)})
     } else {
       snowfall::sfLibrary(package="geoR", character.only=TRUE)
-      out <- snowfall::sfLapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT)})
+      out <- snowfall::sfLapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT, pars.ranger=pars.ranger)})
     }
     snowfall::sfStop()
   } else {
-    out <- lapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT)})
+    out <- lapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT, pars.ranger=pars.ranger)})
   }
   ## calculate mean accuracy:
   out <- plyr::rbind.fill(out)
@@ -76,9 +74,7 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
   # see comments in manuscript and maybe change. 
   MAE.SE = mean(abs(out$Observed - out$Predicted)-out$SE, na.rm=TRUE)
   ## https://en.wikipedia.org/wiki/Coefficient_of_determination
-  ## >> MN: R2: Remove the the commeted R.squared line, it would be correct with:
-  ## 1-sum(( (out$Observed - out$Predicted) - mean(out$Observed - out$Predicted) )^2)/(var(out$Observed, na.rm=TRUE)*(sum(!is.na(out$Observed))-1))
-  #R.squared = 1-sum((out$Observed - out$Predicted)^2, na.rm=TRUE)/(var(out$Observed, na.rm=TRUE)*sum(!is.na(out$Observed)))
+  #R.squared = 1-sum(( (out$Observed - out$Predicted) - mean(out$Observed - out$Predicted) )^2)/(var(out$Observed, na.rm=TRUE)*(sum(!is.na(out$Observed))-1))
   R.squared = 1-var(out$Observed - out$Predicted, na.rm=TRUE)/var(out$Observed, na.rm=TRUE)
   if(Log==TRUE){
     ## If the variable is log-normal then logR.squared is probably more correct
@@ -99,21 +95,16 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
   return(cv.r)
 }
 
-predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, Nsub=1e4, OK=FALSE, spcT=TRUE){ 
+predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, Nsub, OK=FALSE, spcT=TRUE, pars.ranger){ 
   ##>> MN: function parameters-----
   # somehow the parameter set that is specified here and called in RF_vs_kriging.R is a bit odd. 
   # For method == "geoR" spcT has no meaning, the same for method == "ranger" & OK = T
-  # 
   s.train <- points[!sel==j,]
   s.test <- points[sel==j,]
-  ##>> MN: Nsub can never go missing, it is prespecified. ----
-  # then, if it was, formulaString is not specified / handed over. 
-  if(missing(Nsub)){ Nsub = length(all.vars(formulaString))*50 }
   if(!Nsub>nrow(s.train)){ 
     s.train = s.train[sample.int(nrow(s.train), Nsub),]
   }
   if(method=="ranger"){
-    ##>> MN: could perhaps be de-dublicated on coordinates, as you also do that before kfold
     dist0 <- GSIF::buffer.dist(s.train[varn], covs, as.factor(1:nrow(s.train)))
     dn0 <- paste(names(dist0), collapse="+")
     ovT <- over(s.train[varn], dist0)
@@ -139,9 +130,18 @@ predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, N
       rmatrix = do.call(cbind, list(s.train@data, ovT))
       rmatrix.test = do.call(cbind, list(s.test@data, ovV))
     }
-    gm <- ranger(fm0, rmatrix[complete.cases(rmatrix),], keep.inbag = TRUE)
+    #gm <- ranger(fm0, rmatrix[complete.cases(rmatrix),], keep.inbag = TRUE)
+    if(missing(pars.ranger)){
+      gm <- quantregRanger(fm0, rmatrix[complete.cases(rmatrix),])
+    } else {
+      pars.ranger$mtry = ifelse(pars.ranger$mtry >= length(all.vars(fm0)), length(all.vars(fm0))-1, pars.ranger$mtry)
+      ##  mtry can not be larger than number of variables in data
+      gm <- quantregRanger(fm0, rmatrix[complete.cases(rmatrix),], pars.ranger)
+    }
     sel.t = complete.cases(rmatrix.test)
-    pred <- predict(gm, rmatrix.test[sel.t,], type = "se")
+    #pred <- predict(gm, rmatrix.test[sel.t,], type = "se")
+    x.pred <- predict(gm, rmatrix.test[sel.t,], quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2))
+    pred <- data.frame(predictions=x.pred[,2], se=(x.pred[,3]-x.pred[,1])/2)
   }
   if(method=="geoR"){
     sel.d = complete.cases(over(y=covs, x=s.train))

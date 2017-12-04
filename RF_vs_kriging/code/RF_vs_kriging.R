@@ -1,29 +1,42 @@
 ## Comparison RF vs kriging, see slides at: https://github.com/ISRICWorldSoil/GSIF_tutorials/blob/master/geul/5H_Hengl.pdf
-## tom.hengl@gmail.com
-## Cite as: Hengl et al., "Random Forest as Best Unbiased Generic Predictor (BUGP) for Spatial and Spatio-temporal Data", to be submitted to PeerJ Computer Science
+## By: tom.hengl@gmail.com, contributions by: Madlene Nussbaum <madlene.nussbaum@bfh.ch> and Marvin Wright <marv@wrig.de>
+## Cite as: Hengl et al., "Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables", to be submitted to PeerJ Computer Science
 
-list.of.packages <- c("plyr", "parallel", "randomForest", "quantregForest", "plotKML", "GSIF", "ranger", "RCurl", "raster", "rgdal", "geoR")
+list.of.packages <- c("plyr", "parallel", "randomForest", "quantregForest", "plotKML", "GSIF", "ranger", "RCurl", "raster", "rgdal", "geoR", "gstat", "scales", "gdistance", "entropy")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, dependencies = TRUE)
 
-# setwd("~/git/GeoMLA/RF_vs_kriging")
-setwd("~/projects/GeoMLA/RF_vs_kriging")
+setwd("~/git/GeoMLA/RF_vs_kriging")
+#setwd("~/projects/GeoMLA/RF_vs_kriging")
 # load(".RData")
 library(GSIF)
 library(rgdal)
 library(raster)
 library(gstat)
 library(randomForest)
-library(quantregForest)
 library(plotKML)
 library(scales)
-## to speed up computing of "se" in ranger use https://github.com/imbs-hl/ranger/pull/231
-library(ranger)
 library(RCurl)
 library(parallel)
 library(geoR)
+#library(quantregForest)
 #library(geostatsp)
+
+## RANGER connected packages (best install from github):
+## speed up of computing of "se" in ranger https://github.com/imbs-hl/ranger/pull/231
+#devtools::install_github("imbs-hl/ranger")
+library(ranger)
+#devtools::install_github("PhilippPro/quantregRanger")
+library(quantregRanger)
+## http://philipppro.github.io/Tuning_random_forest/
+#devtools::install_github("PhilippPro/tuneRF")
+library(tuneRF)
+
+## Legend for plots:
 leg = c("#0000ff", "#0028d7", "#0050af", "#007986", "#00a15e", "#00ca35", "#00f20d", "#1aff00", "#43ff00", "#6bff00", "#94ff00", "#bcff00", "#e5ff00", "#fff200", "#ffca00", "#ffa100", "#ff7900", "#ff5000", "#ff2800", "#ff0000")
+axis.ls = list(at=c(4.8,5.7,6.5,7.4), labels=round(expm1(c(4.8,5.7,6.5,7.4))))
+## 1 s.d. quantiles
+quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2)
 source('code/BGUP_functions.R')
 
 ## Load the Meuse data set:
@@ -39,7 +52,6 @@ plot(rf$predicted~rf$y, asp=1)
 abline(0,1)
 meuse.grid$glm.zinc <- predict(m, meuse.grid@data, type="response")
 meuse.grid$rf.zinc <- predict(rf, meuse.grid@data)[,2]
-
 ## Plot predictions next to each other:
 meuse.grid$glm.zinc = ifelse(meuse.grid$glm.zinc<expm1(4.8), expm1(4.8), meuse.grid$glm.zinc)
 png(file = "results/meuse/Fig_comparison_GLM_RF_zinc_meuse.png", res = 150, width = 1750, height = 1200)
@@ -58,61 +70,126 @@ zinc.vgm <- likfit(zinc.geo, lambda=0, messages=FALSE, ini=c(var(log1p(zinc.geo$
 locs = meuse.grid@coords
 zinc.ok <- krige.conv(zinc.geo, locations=locs, krige=krige.control(obj.model=zinc.vgm))
 meuse.grid$zinc_ok = zinc.ok$predict
-meuse.grid$zinc_ok_var = zinc.ok$krige.var
+## Prediction error:
+meuse.grid$zinc_ok_var = sqrt(zinc.ok$krige.var)
 
 ## Zinc predicted using RF and buffer distances only ----
-grid.dist0 <- buffer.dist(meuse["zinc"], meuse.grid[1], as.factor(1:nrow(meuse)))
+grid.dist0 <- GSIF::buffer.dist(meuse["zinc"], meuse.grid[1], as.factor(1:nrow(meuse)))
 dn0 <- paste(names(grid.dist0), collapse="+")
 fm0 <- as.formula(paste("zinc ~ ", dn0))
 ov.zinc <- over(meuse["zinc"], grid.dist0)
-m.zinc <- ranger(fm0, cbind(meuse@data["zinc"], ov.zinc), keep.inbag = TRUE)
-zinc.rfd <- predict(m.zinc, grid.dist0@data, type = "se")
-meuse.grid$zinc_rfd = zinc.rfd$predictions
-meuse.grid$zinc_rfd_var = zinc.rfd$se
+## Get a good estimate of "mtry":
+rm.zinc <- cbind(meuse@data["zinc"], ov.zinc)
+rt.zinc <- makeRegrTask(data = rm.zinc, target = "zinc")
+#estimateTimeTuneRF(rt.zinc)
+t.zinc <- tuneRF(rt.zinc, num.trees = 150, build.final.model = FALSE)
+t.zinc
+pars.zinc = list(mtry= t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150)
+m.zinc <- quantregRanger(fm0, cbind(meuse@data["zinc"], ov.zinc), params.ranger = pars.zinc)
+m.zinc
+zinc.rfd <- predict(m.zinc, grid.dist0@data, quantiles)
+meuse.grid$zinc_rfd = zinc.rfd[,2]
+## Prediction error:
+meuse.grid$zinc_rfd_var = (zinc.rfd[,3]-zinc.rfd[,1])/2
+summary(meuse.grid$zinc_rfd_var)
+## Compare with the prediction error derived using the ranger package:
+m.zinc.r <- ranger(fm0, cbind(meuse@data["zinc"], ov.zinc), keep.inbag = TRUE)
+zinc.rfdR <- predict(m.zinc.r, grid.dist0@data, type="se")
+## Prediction error:
+meuse.grid$zinc_rfdR_var =  sqrt(zinc.rfdR$se^2 + var(m.zinc.r$predictions-meuse$zinc))
+summary(meuse.grid$zinc_rfdR_var)
+## Much higher than what we get with the "quantregRanger"
 
-## Zinc predicted using RF and coordinates as covariates only ----
+## RF and coordinates as covariates only ----
 fmc <- zinc ~ x + y
 set.seed(1)
-m.zinc.coords <- ranger(fmc, cbind(meuse@data["zinc"], meuse@coords), keep.inbag = TRUE)
-zinc.rfc <- predict(m.zinc.coords, meuse.grid@coords, type = "se")
-meuse.grid$zinc_rfc = zinc.rfc$predictions
-meuse.grid$zinc_rfc_var = zinc.rfc$se
-
-
-## Plot predictions next to each other:
-var.max = max(c(meuse.grid$zinc_rfd_var, sqrt(meuse.grid$zinc_ok_var)))
-axis.ls = list(at=c(4.8,5.7,6.5,7.4), labels=round(expm1(c(4.8,5.7,6.5,7.4))))
-pdf(file = "results/meuse/Fig_comparison_OK_RF_zinc_meuse.pdf", width=9, height=9)
-par(mfrow=c(2,3), oma=c(0,0,0,1), mar=c(0,0,4,3))
-plot(log1p(raster(meuse.grid["zinc_ok"])), col=leg, zlim=c(4.8,7.4), main="Ordinary Kriging (OK)", axes=FALSE, box=FALSE, axis.args=axis.ls)
+m.zinc.coords <- quantregRanger(fmc, cbind(meuse@data["zinc"], meuse@coords))
+m.zinc.coords
+## R-squared still quite high 0.47!
+zinc.rfc <- predict(m.zinc.coords, meuse.grid@coords, quantiles)
+meuse.grid$zinc_rfc = zinc.rfc[,2]
+meuse.grid$zinc_rfc_var = (zinc.rfc[,3]-zinc.rfc[,1])/2
+## Plot
+png(file = "results/meuse/Fig_RF_zinc_coordinates_only.png", res = 150, width = 1750, height = 1200)
+par(mfrow=c(1,2), oma=c(0,0,0,0))
+plot(log1p(raster(meuse.grid["zinc_rfc"])), col=leg, zlim=c(4.8,7.4), main="RF coordinates only", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
-plot(log1p(raster(meuse.grid["zinc_rfd"])), col=leg, zlim=c(4.8,7.4), main="Random Forest (RF), buffers", axes=FALSE, box=FALSE, axis.args=axis.ls)
-points(meuse, pch="+")
-plot(log1p(raster(meuse.grid["zinc_rfc"])), col=leg, zlim=c(4.8,7.4), main="Random Forest (RF), coordinates", axes=FALSE, box=FALSE, axis.args=axis.ls)
-points(meuse, pch="+")
-plot(sqrt(raster(meuse.grid["zinc_ok_var"])), col=rev(bpy.colors()), zlim=c(0,var.max), main="OK prediction error", axes=FALSE, box=FALSE)
-points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfd_var"]), col=rev(bpy.colors()), zlim=c(0,var.max), main="RF prediction error, buffers", axes=FALSE, box=FALSE)
-points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfc_var"]), col=rev(bpy.colors()), zlim=c(0,var.max), main="RF prediction error, coords", axes=FALSE, box=FALSE)
+plot(raster(meuse.grid["zinc_rfc_var"]), main="Prediction error", col=rev(bpy.colors()), axes=FALSE, box=FALSE)
 points(meuse, pch="+")
 dev.off()
-## TH: RF smooths somewhat more than OK
+
+## RF with noise data ----
+xN = cbind(meuse@data["zinc"], ov.zinc)
+xN$zinc = runif(length(xN$zinc))
+m.zincN <- quantregRanger(fm0, xN)
+m.zincN
+## Correclty R-square close to 0
+zinc.rfdN <- predict(m.zincN, grid.dist0@data, quantiles)
+meuse.grid$zinc_rfdN = zinc.rfdN[,2]
+meuse.grid$zinc_rfd_varN = (zinc.rfdN[,3]-zinc.rfdN[,1])/2
+summary(meuse.grid$zinc_rfd_varN)
+## 2nd try:
+xN$zinc = runif(length(xN$zinc))
+m.zincN2 <- quantregRanger(fm0, xN)
+zinc.rfdN2 <- predict(m.zincN2, grid.dist0@data, quantiles)
+meuse.grid$zinc_rfdN2 = zinc.rfdN2[,2]
+meuse.grid$zinc_rfd_varN2 = (zinc.rfdN2[,3]-zinc.rfdN2[,1])/2
+## The expected mean and the se around the mean is:
+mean(xN$zinc)
+sqrt(var(xN$zinc - 0.5))
+## 0.28
+mean(meuse.grid$zinc_rfd_varN)
+## 0.29
+## Matches exactly s.d. from uniform distribution
+
+## Plot 2 realizations:
+png(file = "results/meuse/Fig_RF_zinc_pure_noise.png", res = 150, width = 1750, height = 1600)
+par(mfrow=c(2,2), oma=c(0,0,0,1), mar=c(0,0,4,3))
+plot(raster(meuse.grid["zinc_rfdN"]), col=leg, zlim=c(0,1), main="RF predictions (pure noise) 1", axes=FALSE, box=FALSE)
+points(meuse, pch="+")
+plot(raster(meuse.grid["zinc_rfd_varN"]), col=rev(bpy.colors()), main="RF prediction error 1", axes=FALSE, box=FALSE, zlim=c(0.1,.43))
+points(meuse, pch="+")
+plot(raster(meuse.grid["zinc_rfdN2"]), col=leg, zlim=c(0,1), main="RF predictions (pure noise) 2", axes=FALSE, box=FALSE)
+points(meuse, pch="+")
+plot(raster(meuse.grid["zinc_rfd_varN2"]), col=rev(bpy.colors()), main="RF prediction error 2", axes=FALSE, box=FALSE, zlim=c(0.1,.43))
+points(meuse, pch="+")
+dev.off()
+
+## Plot predictions UK and RF next to each other:
+pdf(file = "results/meuse/Fig_comparison_OK_RF_zinc_meuse.pdf", width=9.5, height=8)
+var.max = max(c(meuse.grid$zinc_rfd_var, meuse.grid$zinc_ok_var))
+var.min = min(c(meuse.grid$zinc_rfd_var, meuse.grid$zinc_ok_var))
+par(mfrow=c(2,3), oma=c(0,0,0,1), mar=c(0,0,4,3))
+plot(log1p(raster(meuse.grid["zinc_ok"])), col=leg, zlim=c(4.7,7.4), main="Ordinary Kriging (OK)", axes=FALSE, box=FALSE, axis.args=axis.ls)
+points(meuse, pch="+")
+plot(log1p(raster(meuse.grid["zinc_rfd"])), col=leg, zlim=c(4.7,7.4), main="Random Forest (RF), buffers", axes=FALSE, box=FALSE, axis.args=axis.ls)
+points(meuse, pch="+")
+plot(log1p(raster(meuse.grid["zinc_rfc"])), col=leg, zlim=c(4.7,7.4), main="Random Forest (RF), coordinates", axes=FALSE, box=FALSE, axis.args=axis.ls)
+points(meuse, pch="+")
+plot(raster(meuse.grid["zinc_ok_var"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="OK prediction error", axes=FALSE, box=FALSE)
+points(meuse, pch="+")
+plot(raster(meuse.grid["zinc_rfd_var"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="RF prediction error, buffers", axes=FALSE, box=FALSE)
+points(meuse, pch="+")
+plot(raster(meuse.grid["zinc_rfc_var"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="RF prediction error, coords", axes=FALSE, box=FALSE)
+points(meuse, pch="+")
+dev.off()
+## TH: RF creates smoother predictions than OK
 
 ## cross-validation (takes few seconds):
-cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="ranger", OK=TRUE, spcT=FALSE)
+cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="ranger", OK=TRUE, spcT=FALSE, pars.ranger=pars.zinc)
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
 cv.RF$Summary$R.squared; cv.OK$Summary$R.squared
 cv.RF$Summary$MAE.SE; cv.OK$Summary$MAE.SE
-sd(meuse$zinc)/sqrt(nrow(meuse))
+## Compare with the standard error of the mean:
+sqrt(var(meuse$zinc)/nrow(meuse))
 ## plot results
 library(lattice)
 require(gridExtra)
 lim.zinc = range(meuse$zinc, na.rm = TRUE)
 pdf(file = "results/meuse/Fig_correlation_plots_OK_RF_zinc_meuse.pdf", width=9, height=5)
 par(oma=c(0,0,0,1), mar=c(0,0,0,2))
-plt.RF = xyplot(cv.RF[[1]]$Predicted~cv.RF[[1]]$Observed, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), xlab="measured", ylab="predicted (machine learning)", panel = pfun.line, xlim=lim.zinc, ylim=lim.zinc)
-plt.OK = xyplot(cv.OK[[1]]$Predicted~cv.OK[[1]]$Observed, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), xlab="measured", ylab="predicted (geoR)", panel = pfun.line, xlim=lim.zinc, ylim=lim.zinc)
+plt.RF = xyplot(cv.RF[[1]]$Observed~cv.RF[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed", xlab="predicted (RF)", panel = pfun.line, xlim=lim.zinc, ylim=lim.zinc)
+plt.OK = xyplot(cv.OK[[1]]$Observed~cv.OK[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed", xlab="predicted (geoR)", panel = pfun.line, xlim=lim.zinc, ylim=lim.zinc)
 grid.arrange(plt.OK, plt.RF, ncol=2)
 dev.off()
 
@@ -124,29 +201,24 @@ grids.spc = spc(meuse.grid, as.formula("~ SW_occurrence + AHN + ffreq + dist"))
 ## fit hybrid RF model:
 fm1 <- as.formula(paste("zinc ~ ", dn0, " + ", paste(names(grids.spc@predicted), collapse = "+")))
 ov.zinc1 <- over(meuse["zinc"], grids.spc@predicted)
-m1.zinc <- ranger(fm1, do.call(cbind, list(meuse@data["zinc"], ov.zinc, ov.zinc1)), keep.inbag = TRUE, importance = "impurity")
+m1.zinc <- quantregRanger(fm1, do.call(cbind, list(meuse@data["zinc"], ov.zinc, ov.zinc1)), params.ranger = c(list(importance = "impurity"), pars.zinc))
 m1.zinc
-zinc.rfd1 <- predict(m1.zinc, cbind(grid.dist0@data, grids.spc@predicted@data), type = "se")
-meuse.grid$zinc_rfd1 = zinc.rfd1$predictions
-meuse.grid$zinc_rfd1_var = zinc.rfd1$se
-xl <- as.list(ranger::importance(m1.zinc))
+zinc.rfd1 <- predict(m1.zinc, cbind(grid.dist0@data, grids.spc@predicted@data), quantiles)
+meuse.grid$zinc_rfd1 = zinc.rfd1[,2]
+meuse.grid$zinc_rfd1_var = (zinc.rfd1[,3]-zinc.rfd1[,1])/2
+xl <- as.list(m1.zinc$variable.importance)
 print(t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[1:10]])))
-m2.zinc <- ranger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = "+")), do.call(cbind, list(meuse@data["zinc"], ov.zinc1)))
+m2.zinc <- quantregRanger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = "+")), do.call(cbind, list(meuse@data["zinc"], ov.zinc1)))
 m2.zinc
-meuse.grid$zinc_rfd2 = predict(m2.zinc, grids.spc@predicted@data)$predictions
+meuse.grid$zinc_rfd2 = predict(m2.zinc, grids.spc@predicted@data)[,2]
 
 pdf(file = "results/meuse/Fig_RF_covs_bufferdist_zinc_meuse.pdf", width=9, height=5)
 par(mfrow=c(1,2), oma=c(0,0,0,1), mar=c(0,0,4,3))
-plot(log1p(raster(meuse.grid["zinc_rfd2"])), col=leg, zlim=c(4.8,7.4), main="Random Forest (RF) covs only", axes=FALSE, box=FALSE, axis.args=axis.ls)
+plot(log1p(raster(meuse.grid["zinc_rfd2"])), col=leg, zlim=c(4.7,7.4), main="Random Forest (RF) covs only", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
-plot(log1p(raster(meuse.grid["zinc_rfd1"])), col=leg, zlim=c(4.8,7.4), main="Random Forest (RF) covs + buffer dist.", axes=FALSE, box=FALSE, axis.args=axis.ls)
+plot(log1p(raster(meuse.grid["zinc_rfd1"])), col=leg, zlim=c(4.7,7.4), main="Random Forest (RF) covs + buffer dist.", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
 dev.off()
-
-# Covariate importance
-xl <- as.list(ranger::importance(m1.zinc))
-print(t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[1:10]])))
-
 
 
 ## SIC 1997 data set ----
@@ -169,42 +241,51 @@ KC = krige.control(trend.d = sic.t, trend.l = ~ swiss1km$CHELSA_rainfall + swiss
 rain.uk <- krige.conv(sic97.geo, locations=locs2, krige=KC)
 swiss1km$rainfall_UK = rain.uk$predict
 swiss1km$rainfall_UK_var = rain.uk$krige.var
-plot(raster(swiss1km["rainfall_UK"]))
-plot(sqrt(raster(swiss1km["rainfall_UK_var"])))
+#plot(raster(swiss1km["rainfall_UK"]))
+#plot(sqrt(raster(swiss1km["rainfall_UK_var"])))
 
 ## SIC 1997 Random Forest example ----
-swiss.dist0 <- buffer.dist(sic97.sp["rainfall"], swiss1km[1], as.factor(1:nrow(sic97.sp))) ## takes 2-3 mins
+swiss.dist0 <- buffer.dist(sic97.sp["rainfall"], swiss1km[1], as.factor(1:nrow(sic97.sp))) ## takes 2-3 mins!
 ## Deriving buffer distances is computationally very intensive
 ov.swiss = over(sic97.sp["rainfall"], swiss.dist0)
 sw.dn0 <- paste(names(swiss.dist0), collapse="+")
 sw.fm1 <- as.formula(paste("rainfall ~ ", sw.dn0, " + CHELSA_rainfall + DEM"))
 ov.rain <- over(sic97.sp["rainfall"], swiss1km[1:2])
 sw.rm = do.call(cbind, list(sic97.sp@data["rainfall"], ov.rain, ov.swiss))
-m1.rain <- ranger::ranger(sw.fm1, sw.rm[complete.cases(sw.rm),], keep.inbag = TRUE, importance = "impurity")
+## fine-tune RF:
+rt.rain <- makeRegrTask(data = sw.rm[complete.cases(sw.rm[,all.vars(sw.fm1)]),], target = "rainfall")
+#estimateTimeTuneRF(rt.rain)
+## Too time-consuming
+#t.rain <- tuneRF(rt.rain, num.trees = 100, build.final.model = FALSE)
+#t.rain
+#pars.rain = list(mtry= t.rain$recommended.pars$mtry, min.node.size=t.rain$recommended.pars$min.node.size, sample.fraction=t.rain$recommended.pars$sample.fraction, num.trees=100)
+m1.rain <- quantregRanger(sw.fm1, sw.rm[complete.cases(sw.rm),], params.ranger = list(importance = "impurity", mtry=140, num.trees=150))
 m1.rain
-rain.rfd1 <- predict(m1.rain, cbind(swiss.dist0@data, swiss1km@data), type = "se")
-swiss1km$rainfall_rfd1 = rain.rfd1$predictions
-swiss1km$rainfall_rfd1_var = rain.rfd1$se
-xl1 <- as.list(ranger::importance(m1.rain))
+## 0.81
+rain.rfd1 <- predict(m1.rain, cbind(swiss.dist0@data, swiss1km@data), quantiles)
+swiss1km$rainfall_rfd1 = rain.rfd1[,2]
+swiss1km$rainfall_rfd1_var = (rain.rfd1[,3]-rain.rfd1[,1])/2
+xl1 <- as.list(m1.rain$variable.importance)
 print(t(data.frame(xl1[order(unlist(xl1), decreasing=TRUE)[1:15]])))
 
-rain.max = max(swiss1km$rainfall_rfd1, na.rm = TRUE)
-swiss1km$rainfall_UK = ifelse(swiss1km$rainfall_UK<0, 0, ifelse(swiss1km$rainfall_UK>rain.max, rain.max, swiss1km$rainfall_UK))
 ## Plot predictions next to each other:
+rain.max = max(swiss1km$rainfall_rfd1, na.rm = TRUE)
+rainv.max = max(swiss1km$rainfall_rfd1_var, na.rm = TRUE)
+swiss1km$rainfall_UK = ifelse(swiss1km$rainfall_UK<0, 0, ifelse(swiss1km$rainfall_UK>rain.max, rain.max, swiss1km$rainfall_UK))
 pdf(file = "results/rainfall/Fig_Swiss_rainfall_UK_vs_RF.pdf", width=12, height=8)
 par(mfrow=c(2,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
 plot(raster(swiss1km["rainfall_UK"]), col=leg, main="Universal kriging (UK)", axes=FALSE, box=FALSE, zlim=c(0, rain.max))
 points(sic97.sp, pch="+")
 plot(raster(swiss1km["rainfall_rfd1"]), col=leg, main="Random Forest (RF)", axes=FALSE, box=FALSE, zlim=c(0, rain.max))
 points(sic97.sp, pch="+")
-plot(sqrt(raster(swiss1km["rainfall_UK_var"])), col=rev(bpy.colors()), main="Universal kriging (UK) prediction error", axes=FALSE, box=FALSE, zlim=c(0,140))
+plot(sqrt(raster(swiss1km["rainfall_UK_var"])), col=rev(bpy.colors()), main="Universal kriging (UK) prediction error", axes=FALSE, box=FALSE, zlim=c(0,rainv.max))
 points(sic97.sp, pch="+")
-plot(raster(swiss1km["rainfall_rfd1_var"]), col=rev(bpy.colors()), main="Random Forest (RF) prediction error", axes=FALSE, box=FALSE, zlim=c(0,140))
+plot(raster(swiss1km["rainfall_rfd1_var"]), col=rev(bpy.colors()), main="Random Forest (RF) prediction error", axes=FALSE, box=FALSE, zlim=c(0,rainv.max))
 points(sic97.sp, pch="+")
 dev.off()
 
 ## cross-validation (computationally intensive - takes few minutes!!):
-cv.RF2 = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="ranger", spcT=TRUE)
+cv.RF2 = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="ranger", spcT=TRUE, pars.ranger = list(mtry=140, num.trees=150))
 cv.UK = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="geoR", spcT=FALSE)
 cv.RF2$Summary$R.squared; cv.UK$Summary$R.squared
 cv.RF2$Summary$MAE.SE; cv.UK$Summary$MAE.SE
@@ -215,8 +296,8 @@ require(gridExtra)
 lim.rain = c(20,max(sic97.sp$rainfall, na.rm = TRUE))
 pdf(file = "results/rainfall/Fig_correlation_plots_OK_RF_rain_SIC97.pdf", width=9, height=5)
 par(oma=c(0,0,0,1), mar=c(0,0,0,2))
-plt.RF2 = xyplot(cv.RF2[[1]]$Predicted~cv.RF2[[1]]$Observed, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), xlab="measured", ylab="predicted (machine learning)", panel = pfun.line, xlim=lim.rain, ylim=lim.rain)
-plt.UK = xyplot(cv.UK[[1]]$Predicted~cv.UK[[1]]$Observed, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), xlab="measured", ylab="predicted (geoR)", panel = pfun.line, xlim=lim.rain, ylim=lim.rain)
+plt.RF2 = xyplot(cv.RF2[[1]]$Observed~cv.RF2[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed", xlab="predicted (machine learning)", panel = pfun.line, xlim=lim.rain, ylim=lim.rain)
+plt.UK = xyplot(cv.UK[[1]]$Observed~cv.UK[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed", xlab="predicted (geoR)", panel = pfun.line, xlim=lim.rain, ylim=lim.rain)
 grid.arrange(plt.UK, plt.RF2, ncol=2)
 dev.off()
 
@@ -248,7 +329,7 @@ eb.dn0 <- paste(names(eberg.dist0), collapse="+")
 eb.fm1 <- as.formula(paste("Parabraunerde ~ ", eb.dn0, "+", paste0("PC", 1:10, collapse = "+")))
 ov.eberg3 <- over(eberg[sel.eberg,"Parabraunerde"], eberg_grid[paste0("PC", 1:10)])
 rm.eberg2 = do.call(cbind, list(eberg@data[sel.eberg,c("Parabraunerde","TAXGRSC")], ov.eberg2, ov.eberg3))
-m1.Parabraunerde <- ranger::ranger(eb.fm1, rm.eberg2[complete.cases(rm.eberg2),], importance = "impurity", probability = TRUE)
+m1.Parabraunerde <- ranger(eb.fm1, rm.eberg2[complete.cases(rm.eberg2),], importance = "impurity", probability = TRUE)
 m1.Parabraunerde
 ## Seems to be quite an accurate model
 xl1.P <- as.list(ranger::importance(m1.Parabraunerde))
@@ -303,6 +384,65 @@ kml(raster(r.G), folder.name="Gley", raster_name="results/eberg/eberg_Gley.png",
 kml(raster(r.P), folder.name="Parabraunerde", raster_name="results/eberg/eberg_Parabraunerde.png", file.name="results/eberg/eberg_Parabraunerde.kml", colour_scale=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,40), png.type="cairo")
 kml(eberg_grid["SSE_t"], folder.name="SSE", raster_name="results/eberg/eberg_SEE.png", file.name="results/eberg/eberg_SEE.kml", colour_scale=rev(bpy.colors()), zlim=c(0,100), png.type="cairo")
 ## Conclusion: looks like regression-kriging on class probs
+
+## Ebergotzen weighted RF (usually measurement error or sampling probability) ----
+## Estimate occurrence probability
+library(maxlike)
+library(spatstat)
+data(eberg)
+coordinates(eberg) <- ~X+Y
+proj4string(eberg) <- CRS("+init=epsg:31467")
+ov.eberg <- over(eberg, eberg_grid)
+sel.eberg = !is.na(ov.eberg$DEMSRT6)
+eberg.xy <- eberg[sel.eberg,"CLYMHT_B"]
+sprob <- spsample.prob(eberg.xy, eberg_grid[paste0("PC", 1:10)])
+ov.ebergS <- over(eberg.xy, eberg_grid[paste0("PC", 1:10)])
+rm.ebergS <- do.call(cbind, list(eberg.xy@data, ov.ebergS, over(eberg.xy, sprob[[1]])))
+fs <- as.formula(paste("CLYMHT_B ~ ", paste(paste0("PC", 1:10), collapse="+")))
+## the lower the occurrence probability, the higher the weight:
+rm.ebergS <- rm.ebergS[complete.cases(rm.ebergS[,all.vars(fs)]),]
+m.CLYw <- quantregRanger(fs, rm.ebergS, list(importance='impurity', case.weights=1/rm.ebergS$iprob))
+m.CLYw
+## R squared (OOB): 0.53
+m.CLYn <- quantregRanger(fs, rm.ebergS, list(importance='impurity'))
+## Compare predictions:
+CLY.rfw <- predict(m.CLYw, eberg_grid@data, quantiles)
+eberg_grid$CLY_rfw <- CLY.rfw[,2]
+summary(eberg_grid$CLY_rfw)
+eberg_grid$CLY_rfw_var <- (CLY.rfw[,3]-CLY.rfw[,1])/2
+CLY.rfn <- predict(m.CLYn, eberg_grid@data, quantiles)
+eberg_grid$CLY_rfn <- CLY.rfn[,2]
+eberg_grid$CLY_rfn_var <- (CLY.rfn[,3]-CLY.rfn[,1])/2
+## compare with pure random sampling
+rnd <- spsample(eberg_grid, type="random", n=length(sprob[["observations"]]))
+sprob2 <- spsample.prob(rnd, eberg_grid[paste0("PC", 1:10)])
+
+pdf(file = "results/eberg/Fig_clay_RF_weighted.pdf", width=11, height=6.5)
+par(mfrow=c(2,3), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
+par(oma=c(0,0,0,0.5), mar=c(0,0,3.5,1))
+plot(raster(sprob[[1]]), col=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,1), main="Occurrence probability", axes=FALSE, box=FALSE)
+points(eberg.xy, pch="+", cex=.8)
+plot(raster(eberg_grid["CLY_rfn"]), col=leg, main="RF predictions clay", axes=FALSE, box=FALSE, zlim=c(0,55))
+plot(raster(eberg_grid["CLY_rfw"]), col=leg, main="RF predictions clay (weigthed)", axes=FALSE, box=FALSE, zlim=c(0,55))
+plot(raster(sprob2[[1]]), col=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,1), main="Occurrence probability", axes=FALSE, box=FALSE)
+points(rnd, pch="+", cex=.8)
+plot(raster(eberg_grid["CLY_rfn_var"]), col=rev(bpy.colors()), main="Prediction error (RF)", axes=FALSE, box=FALSE, zlim=c(0,28))
+plot(raster(eberg_grid["CLY_rfw_var"]), col=rev(bpy.colors()), main="Prediction error (RF weigthed)", axes=FALSE, box=FALSE, zlim=c(0,28))
+dev.off()
+
+## Deriving more complex distances ----
+library(gdistance)
+#writeGDAL(eberg_grid["DEMSRT6"], "/data/tmp/DEMSRT6.sdat", "SAGA")
+r <- raster(eberg_grid["DEMSRT6"])
+hd <- transition(r, function(x){x[2] - x[1]}, 8, symm=FALSE)
+slope <- geoCorrection(hd)
+adj <- adjacent(r, cells=1:ncell(r), pairs=TRUE, directions=8)
+speed <- slope
+speed[adj] <- 6 * exp(-3.5 * abs(slope[adj] + 0.05))
+T <- geoCorrection(speed)
+acost <- accCost(T, c(3575290.6,5713305.5))
+plot(acost)
+writeRaster(acost, "/data/tmp/acost.sdat", "SAGA", overwrite=TRUE)
 
 ## Multivariate case ----
 ## Geochemicals USA (https://mrdata.usgs.gov/geochem/)
@@ -439,3 +579,88 @@ plot(log1p(raster(rk.m1@predicted[2])), col=leg, zlim=c(4.2,6.6), main="Random F
 points(geul.s, pch="+")
 dev.off()
 
+## Spatiotemporal prediction using Random Forest ----
+## Daily precipitation obtained from https://www.ncdc.noaa.gov/cdo-web/search
+co_prec = readRDS("data/st_prec/boulder_prcp.rds")
+str(co_prec)
+# 'data.frame':	176467 obs. of  16 variables:
+summary(co_prec$PRCP)
+## Derive cumulative day:
+co_prec$cdate = floor(unclass(as.POSIXct(as.POSIXct(paste(co_prec$DATE), format="%Y-%m-%d")))/86400)
+hist(co_prec$cdate)
+## Day of the year:
+co_prec$doy = as.integer(strftime(as.POSIXct(paste(co_prec$DATE), format="%Y-%m-%d"), format = "%j"))
+hist(co_prec$doy)
+
+co_locs.sp = co_prec[!duplicated(co_prec$STATION),c("STATION","LATITUDE","LONGITUDE")]
+coordinates(co_locs.sp) = ~ LONGITUDE + LATITUDE
+proj4string(co_locs.sp) = CRS("+proj=longlat +datum=WGS84")
+## Covariate maps:
+co_grids = readRDS("data/st_prec/boulder_grids.rds")
+co_grids = as(co_grids, "SpatialPixelsDataFrame")
+co_locs.sp = spTransform(co_locs.sp, co_grids@proj4string)
+plot(raster(co_grids[1]))
+points(co_locs.sp, pch="+")
+## overlay:
+sel.co <- over(co_locs.sp, co_grids[1])
+co_locs.sp <- co_locs.sp[!is.na(sel.co$elev_1km),]
+T.lst = paste0("2016-02-0", c(1:6))
+for(i in 1:length(T.lst)){
+  co_locs.sp$x = plyr::join(co_locs.sp@data, co_prec[co_prec$DATE==T.lst[i], c("STATION","PRCP")])$PRCP
+  #bubble(co_locs.sp[!is.na(co_locs.sp$x),"x"])
+  writeOGR(co_locs.sp, paste0("results/st_prec/co_prec_", T.lst[i], ".shp"), paste0("co_prec_", T.lst[i]), "ESRI Shapefile")
+}
+## Geographic distances only:
+grid.distP <- GSIF::buffer.dist(co_locs.sp["STATION"], co_grids[1], as.factor(1:nrow(co_locs.sp)))
+#plot(stack(grid.distP[1:3]))
+dnP <- paste(names(grid.distP), collapse="+")
+## spacetime hybrid RF model:
+fmP <- as.formula(paste("PRCP ~ cdate + doy + elev_1km + PRISM_prec +", dnP))
+#fmP0 <- as.formula(paste("PRCP ~ cdate + doy + elev_1km + PRISM_prec"))
+ov.prec <- do.call(cbind, list(co_locs.sp@data, over(co_locs.sp, grid.distP), over(co_locs.sp, co_grids[c("elev_1km","PRISM_prec")])))
+rm.prec <- plyr::join(co_prec, ov.prec)
+rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]),]
+## 'data.frame':	157870 obs. of 246 variables
+m1.prec <- quantregRanger(fmP, rm.prec[sample.int(size = 1e4, n = nrow(rm.prec)),], list(importance = "impurity", num.trees = 150, mtry = 180))
+#m1.prec <- quantregRanger(fmP, rm.prec, list(importance = "impurity", num.trees = 150, mtry = 180))
+## mtry needs to be set HIGH --- the higher the better, but this increases computational intensity
+## For mtry < 20 R-square is close to 0!!
+## TAKES 10 minutes on 8-cores Lenovo Legion
+## mtry = 160 takes only 6 minutes
+m1.prec
+# OOB prediction error (MSE):       0.0052395 
+# R squared (OOB):                  0.8511794 
+sd(co_prec$PRCP, na.rm = TRUE)
+xlP.g <- as.list(m1.prec$variable.importance)
+print(t(data.frame(xlP.g[order(unlist(xlP.g), decreasing=TRUE)[1:10]])))
+# cdate      2400.80112
+# doy        1891.66278
+# PRISM_prec   93.48800
+# elev_1km     72.80193
+# layer.89     17.42405
+# layer.221    14.08694
+# layer.27     14.07233
+# layer.139    13.66933
+# layer.219    11.99654
+# layer.96     11.34862
+
+## Predict some dates (one week):
+T.lst = paste0("2016-02-0", c(1:6))
+for(i in 1:length(T.lst)){
+  if(!file.exists(paste0("results/st_prec/co_PRCP_", T.lst[i], ".tif"))){
+    newdata <- cbind(grid.distP@data, co_grids[c("elev_1km","PRISM_prec")]@data)
+    newdata$cdate <- floor(unclass(as.POSIXct(as.POSIXct(T.lst[i], format="%Y-%m-%d")))/86400)
+    newdata$doy <- as.integer(strftime(as.POSIXct(T.lst[i], format="%Y-%m-%d"), format = "%j"))
+    prec.rfT1 <- predict(m1.prec, newdata, quantiles, all = FALSE) 
+    ## TH: to speed up use only subset of observations
+    ## TH: takes a lot of RAM (could be further optimized)
+    co_grids@data[,paste0("PRCP_", T.lst[i])] = ifelse(prec.rfT1[,2]<0, 0, prec.rfT1[,2])*100
+    co_grids@data[,paste0("PRCP_", T.lst[i], "_pe")] = (prec.rfT1[,3]-prec.rfT1[,1])/2*100
+    #prec.rfT1 <- predict(m1.prec, newdata)
+    #co_grids@data[,paste0("PRCP_", T.lst[i])] = ifelse(prec.rfT1$predictions<0, 0, prec.rfT1$predictions)
+    #plot(co_grids[paste0("PRCP_", T.lst[i])])
+    #points(co_locs.sp, pch="+")
+    writeGDAL(co_grids[paste0("PRCP_", T.lst[i])], fname=paste0("results/st_prec/co_PRCP_", T.lst[i], ".tif"), options="COMPRESS=DEFLATE", type = "Int16", mvFlag = "-32768")
+    writeGDAL(co_grids[paste0("PRCP_", T.lst[i], "_pe")], fname=paste0("results/st_prec/co_PRCP_", T.lst[i], "_pe.tif"), options="COMPRESS=DEFLATE", type = "Int16", mvFlag = "-32768")
+  }
+}
