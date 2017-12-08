@@ -1,26 +1,32 @@
 ## Comparison RF vs kriging, see slides at: https://github.com/ISRICWorldSoil/GSIF_tutorials/blob/master/geul/5H_Hengl.pdf
 ## By: tom.hengl@gmail.com, contributions by: Madlene Nussbaum <madlene.nussbaum@bfh.ch> and Marvin Wright <marv@wrig.de>
 ## Cite as: Hengl et al., "Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables", to be submitted to PeerJ Computer Science
+## Licence: GNU GPL
 
-list.of.packages <- c("plyr", "parallel", "randomForest", "quantregForest", "plotKML", "GSIF", "ranger", "RCurl", "raster", "rgdal", "geoR", "gstat", "scales", "gdistance", "entropy")
+list.of.packages <- c("plyr", "parallel", "randomForest", "quantregForest", "plotKML", "GSIF", "RCurl", "raster", "rgdal", "geoR", "gstat", "scales", "gdistance", "entropy", "lattice", "gridExtra", "intamap", "maxlike", "spatstat")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, dependencies = TRUE)
 
 setwd("~/git/GeoMLA/RF_vs_kriging")
-#setwd("~/projects/GeoMLA/RF_vs_kriging")
-load(".RData")
+
 library(GSIF)
 library(rgdal)
 library(raster)
 library(gstat)
+library(plyr)
 library(randomForest)
 library(plotKML)
 library(scales)
 library(RCurl)
 library(parallel)
 library(geoR)
-#library(quantregForest)
-#library(geostatsp)
+library(lattice)
+library(gridExtra)
+library(intamap)
+library(maxlike)
+library(spatstat)
+library(entropy)
+library(gdistance)
 
 ## RANGER connected packages (best install from github):
 ## speed up of computing of "se" in ranger https://github.com/imbs-hl/ranger/pull/231
@@ -32,12 +38,14 @@ library(quantregRanger)
 #devtools::install_github("PhilippPro/tuneRF")
 library(tuneRF)
 
+source('code/BGUP_functions.R')
+
+## General Settings
 ## Legend for plots:
 leg = c("#0000ff", "#0028d7", "#0050af", "#007986", "#00a15e", "#00ca35", "#00f20d", "#1aff00", "#43ff00", "#6bff00", "#94ff00", "#bcff00", "#e5ff00", "#fff200", "#ffca00", "#ffa100", "#ff7900", "#ff5000", "#ff2800", "#ff0000")
 axis.ls = list(at=c(4.8,5.7,6.5,7.4), labels=round(expm1(c(4.8,5.7,6.5,7.4))))
 ## 1 s.d. quantiles
 quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2)
-source('code/BGUP_functions.R')
 
 ## Load the Meuse data set:
 demo(meuse, echo=FALSE)
@@ -195,9 +203,6 @@ plot_vgm(zinc~1, x, meuse.grid, r1="r1", r2="r2", main="Zinc (Meuse)")
 ## Compare with the standard error of the mean:
 sqrt(var(meuse$zinc)/nrow(meuse))
 ## plot results
-library(lattice)
-library(scales)
-require(gridExtra)
 lim.zinc = range(meuse$zinc, na.rm = TRUE)
 pdf(file = "results/meuse/Fig_correlation_plots_OK_RF_zinc_meuse.pdf", width=9, height=5)
 par(oma=c(0,0,0,1), mar=c(0,0,0,2))
@@ -312,9 +317,6 @@ x2 = plyr::join(x2, data.frame(id=row.names(sic97.sp@data), rain=sic97.sp$rainfa
 plot_vgm(rain~1, x2, swiss1km, r1="r1", r2="r2", main="Rainfall (SIC 1997)")
 
 ## plot results
-library(lattice)
-library(scales)
-require(gridExtra)
 lim.rain = c(20,max(sic97.sp$rainfall, na.rm = TRUE))
 pdf(file = "results/rainfall/Fig_correlation_plots_OK_RF_rain_SIC97.pdf", width=9, height=5)
 par(oma=c(0,0,0,1), mar=c(0,0,0,2))
@@ -324,8 +326,6 @@ grid.arrange(plt.UK, plt.RF2, ncol=2)
 dev.off()
 
 ## Intamap example ----
-library(intamap)
-library(gstat)
 data(sic2004)
 coordinates(sic.val) <- ~x+y
 sic.val$value <- sic.val$joker
@@ -425,7 +425,6 @@ dev.off()
 
 
 ## Ebergotzen binomial variable ----
-library(plotKML)
 data(eberg)
 eb.s = sample.int(nrow(eberg), 1200)
 eberg = eberg[eb.s,]
@@ -460,7 +459,6 @@ print(t(data.frame(xl1.P[order(unlist(xl1.P), decreasing=TRUE)[1:10]])))
 pr.Parabraunerde = predict(m1.Parabraunerde, cbind(eberg.dist0@data, eberg_grid@data[paste0("PC", 1:10)]))
 eberg_grid$Parabraunerde_TRUE = pr.Parabraunerde$predictions[,2]
 eberg_grid$Parabraunerde_FALSE = pr.Parabraunerde$predictions[,1]
-library(entropy)
 eberg_grid$SSE = entropy_index(eberg_grid@data[,c("Parabraunerde_TRUE","Parabraunerde_FALSE")])
 
 pdf(file = "results/eberg/Fig_Parabraunerde_RF.pdf", width=7, height=6.5)
@@ -509,8 +507,6 @@ kml(eberg_grid["SSE_t"], folder.name="SSE", raster_name="results/eberg/eberg_SEE
 
 ## Ebergotzen weighted RF (usually measurement error or sampling probability) ----
 ## Estimate occurrence probability
-library(maxlike)
-library(spatstat)
 data(eberg)
 coordinates(eberg) <- ~X+Y
 proj4string(eberg) <- CRS("+init=epsg:31467")
@@ -553,7 +549,6 @@ plot(raster(eberg_grid["CLY_rfw_var"]), col=rev(bpy.colors()), main="Prediction 
 dev.off()
 
 ## Deriving more complex distances ----
-library(gdistance)
 #writeGDAL(eberg_grid["DEMSRT6"], "/data/tmp/DEMSRT6.sdat", "SAGA")
 r <- raster(eberg_grid["DEMSRT6"])
 hd <- transition(r, function(x){x[2] - x[1]}, 8, symm=FALSE)
