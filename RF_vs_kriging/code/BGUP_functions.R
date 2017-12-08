@@ -14,6 +14,20 @@ pfun.line <- function(x,y, ...){
   panel.abline(0,1,lty=2,lw=1,col="black")
 }
 
+## standard variogram plot:
+plot_vgm <- function(formulaString, rmatrix, predictionDomain, r1, r2, main){
+  require(GSIF)
+  v <- GSIF::fit.vgmModel(formulaString, rmatrix, predictionDomain, dimensions="2D")
+  plot(x=v$svgm$dist, y=v$svgm$gamma, pch="+", col = "grey18", xlab='distance', cex=1.1, ylab='gamma', ylim = c(0, max(v$svgm$gamma)), main=main)
+  vline <- variogramLine(v$vgm, maxdist=max(v$svgm$dist), n=length(v$svgm$dist))
+  lines(x=vline$dist, y=vline$gamma, col="darkgrey", lwd=2)
+  ## validation residuals
+  v.r1 <- variogram(as.formula(paste(r1, "~1")), v$observations[r1]) 
+  points(x=v.r1$dist, y=v.r1$gamma, pch="+", col = "red", cex=1.4)
+  v.r2 <- variogram(as.formula(paste(r2, "~1")), v$observations[r2])
+  points(x=v.r2$dist, y=v.r2$gamma, pch="+", col = "blue", cex=1.4)
+}
+
 cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus=1, Nsub=1e4, OK=FALSE, spcT=TRUE, Log=FALSE, LLO=TRUE, pars.ranger){
   points = points[!is.na(points@data[,varn]),]
   if(missing(idcol)) { 
@@ -72,7 +86,7 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
   ## Errors of errors:
   ##>> MN: error measure: ----
   # see comments in manuscript and maybe change. 
-  MAE.SE = mean(abs(out$Observed - out$Predicted)-out$SE, na.rm=TRUE)
+  MAE.SE = mean(out$SE - abs(out$Observed - out$Predicted), na.rm=TRUE)
   ## https://en.wikipedia.org/wiki/Coefficient_of_determination
   #R.squared = 1-sum(( (out$Observed - out$Predicted) - mean(out$Observed - out$Predicted) )^2)/(var(out$Observed, na.rm=TRUE)*(sum(!is.na(out$Observed))-1))
   R.squared = 1-var(out$Observed - out$Predicted, na.rm=TRUE)/var(out$Observed, na.rm=TRUE)
@@ -105,6 +119,7 @@ predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, N
     s.train = s.train[sample.int(nrow(s.train), Nsub),]
   }
   if(method=="ranger"){
+    require(quantregRanger)
     dist0 <- GSIF::buffer.dist(s.train[varn], covs, as.factor(1:nrow(s.train)))
     dn0 <- paste(names(dist0), collapse="+")
     ovT <- over(s.train[varn], dist0)
@@ -144,6 +159,7 @@ predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, N
     pred <- data.frame(predictions=x.pred[,2], se=(x.pred[,3]-x.pred[,1])/2)
   }
   if(method=="geoR"){
+    require(geoR)
     sel.d = complete.cases(over(y=covs, x=s.train))
     x.geo <- as.geodata(s.train[sel.d,varn])
     Range = sqrt(areaSpatialGrid(covs))/3

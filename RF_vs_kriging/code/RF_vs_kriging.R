@@ -8,7 +8,7 @@ if(length(new.packages)) install.packages(new.packages, dependencies = TRUE)
 
 setwd("~/git/GeoMLA/RF_vs_kriging")
 #setwd("~/projects/GeoMLA/RF_vs_kriging")
-# load(".RData")
+#load(".RData")
 library(GSIF)
 library(rgdal)
 library(raster)
@@ -41,7 +41,6 @@ source('code/BGUP_functions.R')
 
 ## Load the Meuse data set:
 demo(meuse, echo=FALSE)
-
 ## Compare GLM vs RF ----
 m <- glm(zinc~log1p(dist)+ffreq, meuse, family=gaussian(link=log))
 plot(m$fitted.values~m$y, asp=1)
@@ -64,6 +63,7 @@ dev.off()
 ## TH: Very similar
 
 ## Zinc predicted using ordinary kriging ----
+library(geoR)
 zinc.geo <- as.geodata(meuse["zinc"])
 #plot(variog4(zinc.geo, lambda=0, max.dist=1500, messages=FALSE), lwd=2)
 zinc.vgm <- likfit(zinc.geo, lambda=0, messages=FALSE, ini=c(var(log1p(zinc.geo$data)),500), cov.model="exponential")
@@ -78,22 +78,29 @@ grid.dist0 <- GSIF::buffer.dist(meuse["zinc"], meuse.grid[1], as.factor(1:nrow(m
 dn0 <- paste(names(grid.dist0), collapse="+")
 fm0 <- as.formula(paste("zinc ~ ", dn0))
 ov.zinc <- over(meuse["zinc"], grid.dist0)
-## Get a good estimate of "mtry":
+## Get a good estimate of "mtry" (fine-tuning):
 rm.zinc <- cbind(meuse@data["zinc"], ov.zinc)
 rt.zinc <- makeRegrTask(data = rm.zinc, target = "zinc")
-#estimateTimeTuneRF(rt.zinc)
+estimateTimeTuneRF(rt.zinc)
 t.zinc <- tuneRF(rt.zinc, num.trees = 150, build.final.model = FALSE)
 t.zinc
+# Recommended parameter settings: 
+#   mtry min.node.size sample.fraction
+# 1  152             4       0.9950361
+# Results: 
+#   mse exec.time
+# 1 59988.75    0.1728
 pars.zinc = list(mtry= t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150)
-m.zinc <- quantregRanger(fm0, cbind(meuse@data["zinc"], ov.zinc), params.ranger = pars.zinc)
+m.zinc <- quantregRanger(fm0, rm.zinc, params.ranger = pars.zinc)
 m.zinc
 zinc.rfd <- predict(m.zinc, grid.dist0@data, quantiles)
 meuse.grid$zinc_rfd = zinc.rfd[,2]
 ## Prediction error:
 meuse.grid$zinc_rfd_var = (zinc.rfd[,3]-zinc.rfd[,1])/2
 summary(meuse.grid$zinc_rfd_var)
+## Median = 123.6
 ## Compare with the prediction error derived using the ranger package:
-m.zinc.r <- ranger(fm0, cbind(meuse@data["zinc"], ov.zinc), keep.inbag = TRUE)
+m.zinc.r <- ranger(fm0, rm.zinc, keep.inbag = TRUE)
 zinc.rfdR <- predict(m.zinc.r, grid.dist0@data, type="se")
 ## Prediction error:
 meuse.grid$zinc_rfdR_var =  sqrt(zinc.rfdR$se^2 + var(m.zinc.r$predictions-meuse$zinc))
@@ -180,10 +187,16 @@ cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="r
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
 cv.RF$Summary$R.squared; cv.OK$Summary$R.squared
 cv.RF$Summary$MAE.SE; cv.OK$Summary$MAE.SE
+## Plot residuals vgm:
+x = plyr::join_all(list(data.frame(r1=cv.RF$CV_residuals$Observed-cv.RF$CV_residuals$Predicted, id=cv.RF$CV_residuals$SOURCEID), data.frame(r2=cv.OK$CV_residuals$Observed-cv.OK$CV_residuals$Predicted, id=cv.OK$CV_residuals$SOURCEID)))
+x = plyr::join(x, data.frame(id=row.names(meuse@data), zinc=meuse$zinc, x=meuse@coords[,1], y=meuse@coords[,2]))
+plot_vgm(zinc~1, x, meuse.grid, r1="r1", r2="r2", main="Zinc (Meuse)")
+
 ## Compare with the standard error of the mean:
 sqrt(var(meuse$zinc)/nrow(meuse))
 ## plot results
 library(lattice)
+library(scales)
 require(gridExtra)
 lim.zinc = range(meuse$zinc, na.rm = TRUE)
 pdf(file = "results/meuse/Fig_correlation_plots_OK_RF_zinc_meuse.pdf", width=9, height=5)
@@ -253,7 +266,7 @@ sw.fm1 <- as.formula(paste("rainfall ~ ", sw.dn0, " + CHELSA_rainfall + DEM"))
 ov.rain <- over(sic97.sp["rainfall"], swiss1km[1:2])
 sw.rm = do.call(cbind, list(sic97.sp@data["rainfall"], ov.rain, ov.swiss))
 ## fine-tune RF:
-rt.rain <- makeRegrTask(data = sw.rm[complete.cases(sw.rm[,all.vars(sw.fm1)]),], target = "rainfall")
+#rt.rain <- makeRegrTask(data = sw.rm[complete.cases(sw.rm[,all.vars(sw.fm1)]),], target = "rainfall")
 #estimateTimeTuneRF(rt.rain)
 ## Too time-consuming
 #t.rain <- tuneRF(rt.rain, num.trees = 100, build.final.model = FALSE)
@@ -289,6 +302,14 @@ cv.RF2 = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_ra
 cv.UK = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="geoR", spcT=FALSE)
 cv.RF2$Summary$R.squared; cv.UK$Summary$R.squared
 cv.RF2$Summary$MAE.SE; cv.UK$Summary$MAE.SE
+sqrt(var(sic97.sp$rainfall)/nrow(sic97.sp))
+sd(sic97.sp$rainfall)
+
+## Plot residuals vgm:
+x2 = plyr::join_all(list(data.frame(r1=cv.RF2$CV_residuals$Observed-cv.RF2$CV_residuals$Predicted, id=cv.RF2$CV_residuals$SOURCEID), data.frame(r2=cv.UK$CV_residuals$Observed-cv.UK$CV_residuals$Predicted, id=cv.UK$CV_residuals$SOURCEID)))
+x2 = plyr::join(x2, data.frame(id=row.names(sic97.sp@data), rain=sic97.sp$rainfall, x=sic97.sp@coords[,1], y=sic97.sp@coords[,2]))
+plot_vgm(rain~1, x2, swiss1km, r1="r1", r2="r2", main="Rainfall (SIC 1997)")
+
 ## plot results
 library(lattice)
 library(scales)
@@ -306,7 +327,8 @@ library(intamap)
 library(gstat)
 data(sic2004)
 coordinates(sic.val) <- ~x+y
-sic.val$value <- sic.val$dayx
+sic.val$value <- sic.val$joker
+#sic.val$value <- sic.val$dayx
 #writeOGR(sic.val, "results/sic2004/sic.val.shp", "sic.val", "ESRI Shapefile")
 coordinates(sic.test) <- ~x+y
 pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
@@ -314,10 +336,14 @@ pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
 #[1] "estimated time for copula 71.2993216100125"
 spplot(pred.sic2004$predictions[1])
 #plot(sic.test$dayx~pred.sic2004$predictions$mean, asp=1)
-sd(sic.test$dayx-pred.sic2004$predictions$mean)
+#sd(sic.test$dayx-pred.sic2004$predictions$mean)
 ## 12.4
+sd(sic.test$joker-pred.sic2004$predictions$mean)
+## 104
 
 ## RFsp
+library(tuneRF)
+library(quantregRanger)
 bbox=sic.val@bbox
 bbox[,"min"]=bbox[,"min"]-4000
 bbox[,"max"]=bbox[,"max"]+4000
@@ -325,33 +351,37 @@ de2km = plotKML::vect2rast(sic.val, cell.size=2000, bbox=bbox)
 de2km$mask = 1
 de2km = as(de2km["mask"], "SpatialPixelsDataFrame")
 plot(de2km); points(sic.val)
-de.dist0 <- buffer.dist(sic.val["value"], de2km, as.factor(1:nrow(sic.val@data)))
-ov.de = over(sic.val["value"], de.dist0)
+hist(sic.val$joker, breaks=45, col="grey")
+which(sic.val$joker>500) ## only 2 points with very high values
+which(sic.test$joker>500)
+de.dist0 <- GSIF::buffer.dist(sic.val["joker"], de2km, as.factor(1:nrow(sic.val@data)))
+ov.de = over(sic.val["joker"], de.dist0)
 de.dn0 <- paste(names(de.dist0), collapse="+")
-de.fm1 <- as.formula(paste("value ~ ", de.dn0))
-de.rm = do.call(cbind, list(sic.val@data["value"], ov.de))
-## fine-tune RF:
-#rt.gamma <- makeRegrTask(data = de.rm[complete.cases(de.rm[,all.vars(de.fm1)]),], target = "value")
-#estimateTimeTuneRF(rt.gamma)
-## Too time-consuming
-#t.gamma <- tuneRF(rt.gamma, num.trees = 100, build.final.model = FALSE)
-#t.gamma
-#pars.gamma = list(mtry= t.gamma$recommended.pars$mtry, min.node.size=t.gamma$recommended.pars$min.node.size, sample.fraction=t.gamma$recommended.pars$sample.fraction, num.trees=100)
-m1.gamma <- quantregRanger(de.fm1, de.rm[complete.cases(de.rm),], params.ranger = list(importance = "impurity", mtry=180, num.trees=200))
+de.fm1 <- as.formula(paste("joker ~ ", de.dn0))
+de.rm = do.call(cbind, list(sic.val@data["joker"], ov.de))
+## fine-tuning recommended since the variable has highly skewed distribution with 2 hot spots:
+rt.gamma <- makeRegrTask(data = de.rm[complete.cases(de.rm[,all.vars(de.fm1)]),], target = "joker")
+estimateTimeTuneRF(rt.gamma)
+## 8M
+t.gamma <- tuneRF(rt.gamma, build.final.model = FALSE)
+t.gamma
+pars.gamma = list(mtry=t.gamma$recommended.pars$mtry, min.node.size=t.gamma$recommended.pars$min.node.size, sample.fraction=t.gamma$recommended.pars$sample.fraction)
+m1.gamma <- quantregRanger(de.fm1, de.rm[complete.cases(de.rm),], params.ranger = pars.gamma)
 m1.gamma
-## R squared (OOB): 0.5745
+## R squared (OOB): 0.11
 gamma.rfd1 <- predict(m1.gamma, de.dist0@data, quantiles)
 de2km$gamma_rfd1 = gamma.rfd1[,2]
 de2km$gamma_rfd1_var = (gamma.rfd1[,3]-gamma.rfd1[,1])/2
 plot(de2km["gamma_rfd1"])
 points(sic.val, pch="+")
+#plot(de2km["gamma_rfd1_var"])
 #pred2km.sic2004 <- interpolate(sic.val, de2km, methodName = "automap")
 #de2km$gamma_ok = pred2km.sic2004$predictions$var1.pred
 #plot(de2km["gamma_ok"])
 #points(sic.val, pch="+")
 ov.test <- over(sic.test, de2km["gamma_rfd1"])
-plot(sic.test$dayx~ov.test$gamma_rfd1, asp=1)
-sd(sic.test$dayx-ov.test$gamma_rfd1, na.rm=TRUE)
+#plot(sic.test$dayx~ov.test$gamma_rfd1, asp=1)
+sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
 
 ## Ebergotzen binomial variable ----
 library(plotKML)
@@ -567,6 +597,7 @@ dev.off()
 
 ## Spatiotemporal prediction using Random Forest ----
 ## Daily precipitation obtained from https://www.ncdc.noaa.gov/cdo-web/search
+## compare with: https://www.r-bloggers.com/part-4a-modelling-predicting-the-amount-of-rain/
 co_prec = readRDS("data/st_prec/boulder_prcp.rds")
 str(co_prec)
 # 'data.frame':	176467 obs. of  16 variables:
