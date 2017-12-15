@@ -8,7 +8,7 @@ if(length(new.packages)) install.packages(new.packages, dependencies = TRUE)
 
 setwd("~/git/GeoMLA/RF_vs_kriging")
 #setwd("~/projects/GeoMLA/RF_vs_kriging")
-#load(".RData")
+load(".RData")
 library(GSIF)
 library(rgdal)
 library(raster)
@@ -182,11 +182,11 @@ points(meuse, pch="+")
 dev.off()
 ## TH: RF creates smoother predictions than OK
 
-## cross-validation (takes few seconds):
+## Cross-validation Meuse data set ----
 cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="ranger", OK=TRUE, spcT=FALSE, pars.ranger=pars.zinc)
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
-cv.RF$Summary$R.squared; cv.OK$Summary$R.squared
-cv.RF$Summary$MAE.SE; cv.OK$Summary$MAE.SE
+cv.RF$Summary$RMSE^2/var(meuse$zinc, na.rm = TRUE); cv.RF$Summary$R.squared; cv.RF$Summary$ZSV; cv.RF$Summary$MAE.SE
+cv.OK$Summary$RMSE^2/var(meuse$zinc, na.rm = TRUE); cv.OK$Summary$R.squared; cv.OK$Summary$ZSV; cv.OK$Summary$MAE.SE
 ## Plot residuals vgm:
 x = plyr::join_all(list(data.frame(r1=cv.RF$CV_residuals$Observed-cv.RF$CV_residuals$Predicted, id=cv.RF$CV_residuals$SOURCEID), data.frame(r2=cv.OK$CV_residuals$Observed-cv.OK$CV_residuals$Predicted, id=cv.OK$CV_residuals$SOURCEID)))
 x = plyr::join(x, data.frame(id=row.names(meuse@data), zinc=meuse$zinc, x=meuse@coords[,1], y=meuse@coords[,2]))
@@ -297,11 +297,12 @@ plot(raster(swiss1km["rainfall_rfd1_var"]), col=rev(bpy.colors()), main="Random 
 points(sic97.sp, pch="+")
 dev.off()
 
-## cross-validation (computationally intensive - takes few minutes!!):
-cv.RF2 = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="ranger", spcT=TRUE, pars.ranger = list(mtry=140, num.trees=150))
+## Cross-validation SIC 1997 ----
+## (computationally intensive - takes few minutes!!)
+cv.RF2 = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="ranger", spcT=FALSE, pars.ranger = list(mtry=140, num.trees=150))
 cv.UK = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="geoR", spcT=FALSE)
-cv.RF2$Summary$R.squared; cv.UK$Summary$R.squared
-cv.RF2$Summary$MAE.SE; cv.UK$Summary$MAE.SE
+cv.RF2$Summary$RMSE^2/var(sic97.sp$rainfall); cv.RF2$Summary$R.squared; cv.RF2$Summary$ZSV; cv.RF2$Summary$MAE.SE
+cv.UK$Summary$RMSE^2/var(sic97.sp$rainfall); cv.UK$Summary$R.squared;  cv.UK$Summary$ZSV; cv.UK$Summary$MAE.SE
 sqrt(var(sic97.sp$rainfall)/nrow(sic97.sp))
 sd(sic97.sp$rainfall)
 
@@ -382,6 +383,46 @@ points(sic.val, pch="+")
 ov.test <- over(sic.test, de2km["gamma_rfd1"])
 #plot(sic.test$dayx~ov.test$gamma_rfd1, asp=1)
 sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
+
+## Weighted regression RF ----
+carson <- read.csv(file="data/NRCS/carson_CLYPPT.csv")
+summary(carson$CLYPPT)
+carson$DEPTH.f = ifelse(is.na(carson$DEPTH), 20, carson$DEPTH)
+carson1km <- readRDS("data/NRCS/carson_covs1km.rds")
+coordinates(carson) <- ~X+Y
+proj4string(carson) = carson1km@proj4string
+rm.carson <- cbind(as.data.frame(carson), over(carson["CLYPPT"], carson1km))
+fm.clay <- as.formula(paste("CLYPPT ~ DEPTH.f + ", paste(names(carson1km), collapse = "+")))
+rm.carson <- rm.carson[complete.cases(rm.carson[,all.vars(fm.clay)]),]
+rm.carson.s <- rm.carson[sample.int(size=1250, nrow(rm.carson)),]
+m.clay <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25, case.weights=1/(rm.carson.s$CLYPPT.sd^2)))
+m.clay
+carson1km$DEPTH.f = 30
+clay.rfd <- predict(m.clay, carson1km@data, quantiles)
+carson1km$clay_rfd = ifelse(clay.rfd[,2]<10, 10, ifelse(clay.rfd[,2]>35, 35, clay.rfd[,2]))
+summary(carson1km$clay_rfd)
+carson1km$clay_rfd_var = (clay.rfd[,3]-clay.rfd[,1])/2
+#plot(raster(carson1km["clay_rfd"]), col=plotKML::SAGA_pal[[1]])
+m.clay0 <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25))
+m.clay0
+clay0.rfd <- predict(m.clay0, carson1km@data, quantiles)
+carson1km$clay0_rfd = ifelse(clay0.rfd[,2]<10, 10, ifelse(clay0.rfd[,2]>35, 35, clay0.rfd[,2]))
+carson1km$clay0_rfd_var = (clay0.rfd[,3]-clay0.rfd[,1])/2
+
+pdf(file = "results/NRCS/Fig_clay_RF_weighted.pdf", width=10, height=9)
+par(mfrow=c(2,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
+par(oma=c(0,0,0,0.5), mar=c(0,0,3.5,1))
+plot(raster(carson1km["clay_rfd"]), col=leg, main="RF predictions clay (weigthed)", axes=FALSE, box=FALSE, zlim=c(10,35))
+points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
+plot(raster(carson1km["clay0_rfd"]), col=leg, main="RF predictions clay", axes=FALSE, box=FALSE, zlim=c(10,35))
+points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
+plot(raster(carson1km["clay_rfd_var"]), col=rev(bpy.colors()), main="Prediction error (RF weigthed)", axes=FALSE, box=FALSE, zlim=c(0,28))
+points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
+plot(raster(carson1km["clay0_rfd_var"]), col=rev(bpy.colors()), main="Prediction error (RF)", axes=FALSE, box=FALSE, zlim=c(0,28))
+points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
+dev.off()
+
+
 
 ## Ebergotzen binomial variable ----
 library(plotKML)
@@ -598,6 +639,7 @@ dev.off()
 ## Spatiotemporal prediction using Random Forest ----
 ## Daily precipitation obtained from https://www.ncdc.noaa.gov/cdo-web/search
 ## compare with: https://www.r-bloggers.com/part-4a-modelling-predicting-the-amount-of-rain/
+## NCDC data access explained at: http://neondataskills.org/R/COOP-precip-data-R
 co_prec = readRDS("data/st_prec/boulder_prcp.rds")
 str(co_prec)
 # 'data.frame':	176467 obs. of  16 variables:

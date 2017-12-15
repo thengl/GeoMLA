@@ -41,7 +41,7 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
   if(sum(duplicated(points@data[,idcol]))>0.5*nrow(points@data)){
     if(LLO==TRUE){
       ## TH: Leave whole locations out
-      ul <- unique(points@data[,idcol])
+      ul <- paste(unique(points@data[,idcol]))
       sel.ul <- dismo::kfold(ul, k=nfold)
       sel <- lapply(1:nfold, function(o){ data.frame(row.names=which(points@data[,idcol] %in% ul[sel.ul==o]), x=rep(o, length(which(points@data[,idcol] %in% ul[sel.ul==o])))) })
       sel <- do.call(rbind, sel)
@@ -77,16 +77,16 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
   }
   ## calculate mean accuracy:
   out <- plyr::rbind.fill(out)
+  out$z_score = (out$Observed - out$Predicted)/out$sdPE
   ME = mean(out$Observed - out$Predicted, na.rm=TRUE)
   ##>> MN: MAE - MAD ----
-  # maybe remove, MAE is not in the paper. Or better use MADE median absolute 
-  # deviation error
+  # maybe remove, MAE is not in the paper. Or better use MADE median absolute deviation error?
   MAE = mean(abs(out$Observed - out$Predicted), na.rm=TRUE)
   RMSE = sqrt(mean((out$Observed - out$Predicted)^2, na.rm=TRUE))
+  MZS = mean(out$z_score, na.rm=TRUE)
+  ZSV = sd(out$z_score, na.rm=TRUE)
   ## Errors of errors:
-  ##>> MN: error measure: ----
-  # see comments in manuscript and maybe change. 
-  MAE.SE = mean(out$SE - abs(out$Observed - out$Predicted), na.rm=TRUE)
+  MAE.SE = mean(abs(out$Observed - out$Predicted) - out$sdPE, na.rm=TRUE)
   ## https://en.wikipedia.org/wiki/Coefficient_of_determination
   #R.squared = 1-sum(( (out$Observed - out$Predicted) - mean(out$Observed - out$Predicted) )^2)/(var(out$Observed, na.rm=TRUE)*(sum(!is.na(out$Observed))-1))
   R.squared = 1-var(out$Observed - out$Predicted, na.rm=TRUE)/var(out$Observed, na.rm=TRUE)
@@ -101,15 +101,17 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
     logRMSE = sqrt(mean((log1p(out$Observed) - log1p(out$Predicted))^2, na.rm=TRUE))
     #logR.squared = 1-sum((log1p(out$Observed) - log1p(out$Predicted))^2, na.rm=TRUE)/(var(log1p(out$Observed), na.rm=TRUE)*sum(!is.na(out$Observed)))
     logR.squared = 1-var(log1p(out$Observed) - log1p(out$Predicted), na.rm=TRUE)/var(log1p(out$Observed), na.rm=TRUE)
-    cv.r <- list(out, data.frame(ME=ME, MAE=MAE, RMSE=RMSE, MAE.SE=MAE.SE, R.squared=R.squared, logRMSE=logRMSE, logR.squared=logR.squared)) 
+    cv.r <- list(out, data.frame(ME=ME, MAE=MAE, RMSE=RMSE, MAE.SE=MAE.SE, MZS=MZS, ZSV=ZSV, R.squared=R.squared, logRMSE=logRMSE, logR.squared=logR.squared)) 
   } else {
-    cv.r <- list(out, data.frame(ME=ME, MAE=MAE, RMSE=RMSE, MAE.SE=MAE.SE, R.squared=R.squared))
+    cv.r <- list(out, data.frame(ME=ME, MAE=MAE, RMSE=RMSE, MAE.SE=MAE.SE, MZS=MZS, ZSV=ZSV, R.squared=R.squared))
   }
+  message("DONE")
   names(cv.r) <- c("CV_residuals", "Summary")
   return(cv.r)
 }
 
 predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, Nsub, OK=FALSE, spcT=TRUE, pars.ranger){ 
+  message(paste0("Running ", j, " iteration..."))
   ##>> MN: function parameters-----
   # somehow the parameter set that is specified here and called in RF_vs_kriging.R is a bit odd. 
   # For method == "geoR" spcT has no meaning, the same for method == "ranger" & OK = T
@@ -183,7 +185,7 @@ predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, N
     names(pred)[1] = "predictions"
     pred$se = sqrt(pred$krige.var)
   }
-  obs.pred <- as.data.frame(list(s.test@data[sel.t,varn], pred$predictions, pred$se), col.names=c("Observed", "Predicted", "SE"))
+  obs.pred <- as.data.frame(list(s.test@data[sel.t,varn], pred$predictions, pred$se), col.names=c("Observed", "Predicted", "sdPE"))
   obs.pred[,idcol] <- s.test@data[sel.t,idcol]
   obs.pred$fold = j
   return(obs.pred)
