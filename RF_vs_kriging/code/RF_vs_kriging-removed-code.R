@@ -106,3 +106,22 @@ points(meuse, pch="+")
 dev.off()
 
 
+## ** SIC 1997 data set ---------------------------------------------------
+
+#plot(stack(swiss1km[1:2]))
+
+#plot(raster(swiss1km["rainfall_UK"]))
+#plot(sqrt(raster(swiss1km["rainfall_UK_var"])))
+
+
+xl1 <- as.list(m1.rain$variable.importance)
+# print(t(data.frame(xl1[order(unlist(xl1), decreasing=TRUE)[1:15]])))
+
+# importance is not in the paper, saw it too late, MN
+pdf(file = "results/rainfall/Fig_Swiss_rainfall_RF_covs_covar-importance.pdf", width=6, height=4.5)
+par(mfrow=c(1,1),oma=c(0.7,2,0,1), mar=c(4,3.5,1,0))
+plot(vv <- t(data.frame(xl1[order(unlist(xl1), decreasing=TRUE)[15:1]])), 1:15, type = "n", ylab = "", yaxt = "n", xlab = "Variable Importance (Node Impurity)")
+abline(h = 1:15, lty = "dotted", col = "grey60")
+points(vv, 1:15)
+axis(2, 1:15, labels = dimnames(vv)[[1]], las = 2)
+dev.off()

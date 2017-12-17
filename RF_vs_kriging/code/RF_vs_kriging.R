@@ -148,7 +148,7 @@ pfun.loess <- function(x,y, ...){
   panel.abline(0,1,lty=2,lw=1,col="grey60")
   panel.loess(x,y,span=0.5, col = "grey30", lwd = 1.7)
 }
-plt.RF = xyplot(cv.RF[[1]]$Observed~cv.RF[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed zinc [mg/kg]", xlab="znic predicted by RF [mg/kg]", panel = pfun.loess, xlim=lim.zinc, ylim=lim.zinc)
+plt.RF = xyplot(cv.RF[[1]]$Observed~cv.RF[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed zinc [mg/kg]", xlab="zinc predicted by RF [mg/kg]", panel = pfun.loess, xlim=lim.zinc, ylim=lim.zinc)
 plt.OK = xyplot(cv.OK[[1]]$Observed~cv.OK[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed zinc [mg/kg]", xlab="zinc predicted by geoR [mg/kg]", panel = pfun.loess, xlim=lim.zinc, ylim=lim.zinc)
 grid.arrange(plt.OK, plt.RF, ncol=2)
 dev.off()
@@ -174,11 +174,11 @@ meuse.grid$zinc_rfd1_var = (zinc.rfd1[,3]-zinc.rfd1[,1])/2
 xl <- as.list(m1.zinc$variable.importance)
 
 pdf(file = "results/meuse/Fig_RF_covs_covar-importance.pdf", width=6, height=3.5)
-par(mfrow=c(1,1),oma=c(0.7,2,0,1), mar=c(4,6,1,0))
+par(mfrow=c(1,1),oma=c(0.7,2,0,1), mar=c(4,3.5,1,0))
 plot(vv <- t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[10:1]])), 1:10, type = "n", ylab = "", yaxt = "n", xlab = "Variable Importance (Node Impurity)")
 abline(h = 1:10, lty = "dotted", col = "grey60")
 points(vv, 1:10)
-axis(2, 1:10, labels = gsub( "layer\\.", "buffer dist. to ", dimnames(vv)[[1]]), las = 2)
+axis(2, 1:10, labels = dimnames(vv)[[1]], las = 2)
 dev.off()
 
 rm.zinc2 <- cbind(meuse@data["zinc"], ov.zinc1)
@@ -205,7 +205,6 @@ sic97.sp = readRDS("data/rainfall/sic97.rds")
 swiss1km = readRDS("data/rainfall/swiss1km.rds")
 ov2 = over(y=swiss1km, x=sic97.sp)
 sel.d = which(!is.na(ov2$DEM))
-#plot(stack(swiss1km[1:2]))
 ## linear geostatistical model from: https://www.jstatsoft.org/article/view/v063i12/v63i12.pdf 
 sic97.geo <- as.geodata(sic97.sp[sel.d,"rainfall"])
 ## add covariates:
@@ -219,8 +218,6 @@ KC = krige.control(trend.d = sic.t, trend.l = ~ swiss1km$CHELSA_rainfall + swiss
 rain.uk <- krige.conv(sic97.geo, locations=locs2, krige=KC)
 swiss1km$rainfall_UK = rain.uk$predict
 swiss1km$rainfall_UK_var = rain.uk$krige.var
-#plot(raster(swiss1km["rainfall_UK"]))
-#plot(sqrt(raster(swiss1km["rainfall_UK_var"])))
 
 ## SIC 1997 Random Forest example ----
 swiss.dist0 <- buffer.dist(sic97.sp["rainfall"], swiss1km[1], as.factor(1:nrow(sic97.sp))) ## takes 2-3 mins!
@@ -231,20 +228,20 @@ sw.fm1 <- as.formula(paste("rainfall ~ ", sw.dn0, " + CHELSA_rainfall + DEM"))
 ov.rain <- over(sic97.sp["rainfall"], swiss1km[1:2])
 sw.rm = do.call(cbind, list(sic97.sp@data["rainfall"], ov.rain, ov.swiss))
 ## fine-tune RF:
-#rt.rain <- makeRegrTask(data = sw.rm[complete.cases(sw.rm[,all.vars(sw.fm1)]),], target = "rainfall")
-#estimateTimeTuneRF(rt.rain)
-## Too time-consuming
-#t.rain <- tuneRF(rt.rain, num.trees = 100, build.final.model = FALSE)
-#t.rain
-#pars.rain = list(mtry= t.rain$recommended.pars$mtry, min.node.size=t.rain$recommended.pars$min.node.size, sample.fraction=t.rain$recommended.pars$sample.fraction, num.trees=100)
-m1.rain <- quantregRanger(sw.fm1, sw.rm[complete.cases(sw.rm),], params.ranger = list(importance = "impurity", mtry=140, num.trees=150))
+# rt.rain <- makeRegrTask(data = sw.rm[complete.cases(sw.rm[,all.vars(sw.fm1)]),], target = "rainfall")
+# estimateTimeTuneRF(rt.rain, num.threads=88)
+## Too time-consuming >> do on number cruncher
+# set.seed(1)
+# t.rain <- tuneRF(rt.rain, num.trees = 150, build.final.model = FALSE, num.threads = 88)
+# t.rain
+# pars.rain = list(mtry= t.rain$recommended.pars$mtry, min.node.size=t.rain$recommended.pars$min.node.size, sample.fraction=t.rain$recommended.pars$sample.fraction, num.trees=150, importance = "impurity", seed=1)
+pars.rain = list(mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1)
+m1.rain <- quantregRanger(sw.fm1, sw.rm[complete.cases(sw.rm),], params.ranger = pars.rain)
 m1.rain
-## 0.81
+## 0.83
 rain.rfd1 <- predict(m1.rain, cbind(swiss.dist0@data, swiss1km@data), quantiles)
 swiss1km$rainfall_rfd1 = rain.rfd1[,2]
 swiss1km$rainfall_rfd1_var = (rain.rfd1[,3]-rain.rfd1[,1])/2
-xl1 <- as.list(m1.rain$variable.importance)
-print(t(data.frame(xl1[order(unlist(xl1), decreasing=TRUE)[1:15]])))
 
 ## Plot predictions next to each other:
 rain.max = max(swiss1km$rainfall_rfd1, na.rm = TRUE)
@@ -264,7 +261,8 @@ dev.off()
 
 ## Cross-validation SIC 1997 ----
 ## (computationally intensive - takes few minutes!!)
-cv.RF2 = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="ranger", spcT=FALSE, pars.ranger = list(mtry=140, num.trees=150))
+cv.RF2 = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="ranger", spcT=FALSE, pars.ranger = pars.rain[-c(5)])
+dn0 <- c() # FIXME
 cv.UK = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="geoR", spcT=FALSE)
 cv.RF2$Summary$RMSE^2/var(sic97.sp$rainfall); cv.RF2$Summary$R.squared; cv.RF2$Summary$ZSV; cv.RF2$Summary$MAE.SE
 cv.UK$Summary$RMSE^2/var(sic97.sp$rainfall); cv.UK$Summary$R.squared;  cv.UK$Summary$ZSV; cv.UK$Summary$MAE.SE
@@ -280,12 +278,12 @@ plot_vgm(rain~1, x2, swiss1km, r1="r1", r2="r2", main="Rainfall (SIC 1997)")
 lim.rain = c(20,max(sic97.sp$rainfall, na.rm = TRUE))
 pdf(file = "results/rainfall/Fig_correlation_plots_OK_RF_rain_SIC97.pdf", width=9, height=5)
 par(oma=c(0,0,0,1), mar=c(0,0,0,2))
-plt.RF2 = xyplot(cv.RF2[[1]]$Observed~cv.RF2[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed", xlab="predicted (machine learning)", panel = pfun.line, xlim=lim.rain, ylim=lim.rain)
-plt.UK = xyplot(cv.UK[[1]]$Observed~cv.UK[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed", xlab="predicted (geoR)", panel = pfun.line, xlim=lim.rain, ylim=lim.rain)
+plt.RF2 = xyplot(cv.RF2[[1]]$Observed~cv.RF2[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed precipitation [mm]", xlab="precipitation predicted by RF [mm]", panel = pfun.loess, xlim=lim.rain, ylim=lim.rain)
+plt.UK = xyplot(cv.UK[[1]]$Observed~cv.UK[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed precipitation [mm]", xlab="precipitation predicted by geoR [mm]", panel = pfun.loess, xlim=lim.rain, ylim=lim.rain)
 grid.arrange(plt.UK, plt.RF2, ncol=2)
 dev.off()
 
-## Intamap example ----
+## ** Intamap example ---------------------------------------------------
 data(sic2004)
 coordinates(sic.val) <- ~x+y
 sic.val$value <- sic.val$joker
