@@ -119,7 +119,7 @@ plot(raster(meuse.grid["zinc_ok_var"]), col=rev(bpy.colors()), zlim=c(var.min,va
 points(meuse, pch="+")
 plot(raster(meuse.grid["zinc_rfd_var"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="RF prediction error, buffers", axes=FALSE, box=FALSE)
 points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfc_var"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="RF prediction error, coords", axes=FALSE, box=FALSE)
+plot(raster(meuse.grid["zinc_rfc_var"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="RF prediction error, coordinates", axes=FALSE, box=FALSE)
 points(meuse, pch="+")
 dev.off()
 ## TH: RF creates smoother predictions than OK
@@ -152,14 +152,32 @@ grids.spc = spc(meuse.grid, as.formula("~ SW_occurrence + AHN + ffreq + dist"))
 ## fit hybrid RF model:
 fm1 <- as.formula(paste("zinc ~ ", dn0, " + ", paste(names(grids.spc@predicted), collapse = "+")))
 ov.zinc1 <- over(meuse["zinc"], grids.spc@predicted)
-m1.zinc <- quantregRanger(fm1, do.call(cbind, list(meuse@data["zinc"], ov.zinc, ov.zinc1)), params.ranger = c(list(importance = "impurity"), pars.zinc))
+rm.zinc1 <- cbind(meuse@data["zinc"], ov.zinc, ov.zinc1)
+rt.zinc1 <- makeRegrTask(data = rm.zinc1, target = "zinc")
+set.seed(1)
+t.zinc1 <- tuneRF(rt.zinc1, num.trees = 500, build.final.model = FALSE)
+pars.zinc1 = list(mtry= t.zinc1$recommended.pars$mtry, min.node.size=t.zinc1$recommended.pars$min.node.size, sample.fraction=t.zinc1$recommended.pars$sample.fraction, num.trees=500, importance = "impurity", seed = 1)
+m1.zinc <- quantregRanger(fm1, rm.zinc1, params.ranger = pars.zinc1)
 m1.zinc
 zinc.rfd1 <- predict(m1.zinc, cbind(grid.dist0@data, grids.spc@predicted@data), quantiles)
 meuse.grid$zinc_rfd1 = zinc.rfd1[,2]
 meuse.grid$zinc_rfd1_var = (zinc.rfd1[,3]-zinc.rfd1[,1])/2
 xl <- as.list(m1.zinc$variable.importance)
-print(t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[1:10]])))
-m2.zinc <- quantregRanger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = "+")), do.call(cbind, list(meuse@data["zinc"], ov.zinc1)))
+
+pdf(file = "results/meuse/Fig_RF_covs_covar-importance.pdf", width=6, height=3.5)
+par(mfrow=c(1,1),oma=c(0.7,2,0,1), mar=c(4,6,1,0))
+plot(vv <- t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[10:1]])), 1:10, type = "n", ylab = "", yaxt = "n", xlab = "Variable Importance (Node Impurity)")
+abline(h = 1:10, lty = "dotted", col = "grey60")
+points(vv, 1:10)
+axis(2, 1:10, labels = gsub( "layer\\.", "buffer dist. to ", dimnames(vv)[[1]]), las = 2)
+dev.off()
+
+rm.zinc2 <- cbind(meuse@data["zinc"], ov.zinc1)
+rt.zinc2 <- makeRegrTask(data = rm.zinc2, target = "zinc")
+set.seed(1)
+t.zinc2 <- tuneRF(rt.zinc2, num.trees = 150, build.final.model = FALSE)
+pars.zinc2 = list(mtry= t.zinc2$recommended.pars$mtry, min.node.size=t.zinc2$recommended.pars$min.node.size, sample.fraction=t.zinc2$recommended.pars$sample.fraction, num.trees=150, seed = 1)
+m2.zinc <- quantregRanger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = "+")), rm.zinc2, params.ranger = pars.zinc2)
 m2.zinc
 meuse.grid$zinc_rfd2 = predict(m2.zinc, grids.spc@predicted@data)[,2]
 
