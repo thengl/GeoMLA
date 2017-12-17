@@ -283,104 +283,7 @@ plt.UK = xyplot(cv.UK[[1]]$Observed~cv.UK[[1]]$Predicted, asp=1, par.settings=li
 grid.arrange(plt.UK, plt.RF2, ncol=2)
 dev.off()
 
-## ** Intamap example ---------------------------------------------------
-data(sic2004)
-coordinates(sic.val) <- ~x+y
-sic.val$value <- sic.val$joker
-#sic.val$value <- sic.val$dayx
-#writeOGR(sic.val, "results/sic2004/sic.val.shp", "sic.val", "ESRI Shapefile")
-coordinates(sic.test) <- ~x+y
-pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
-#R 2017-12-06 15:00:58 interpolating 200 observations, 808 prediction locations
-#[1] "estimated time for copula 71.2993216100125"
-spplot(pred.sic2004$predictions[1])
-#plot(sic.test$dayx~pred.sic2004$predictions$mean, asp=1)
-#sd(sic.test$dayx-pred.sic2004$predictions$mean)
-## 12.4
-sd(sic.test$joker-pred.sic2004$predictions$mean)
-## 104
-
-## RFsp
-bbox=sic.val@bbox
-bbox[,"min"]=bbox[,"min"]-4000
-bbox[,"max"]=bbox[,"max"]+4000
-de2km = plotKML::vect2rast(sic.val, cell.size=2000, bbox=bbox)
-de2km$mask = 1
-de2km = as(de2km["mask"], "SpatialPixelsDataFrame")
-plot(de2km); points(sic.val)
-hist(sic.val$joker, breaks=45, col="grey")
-which(sic.val$joker>500) ## only 2 points with very high values
-which(sic.test$joker>500)
-de.dist0 <- GSIF::buffer.dist(sic.val["joker"], de2km, as.factor(1:nrow(sic.val@data)))
-ov.de = over(sic.val["joker"], de.dist0)
-de.dn0 <- paste(names(de.dist0), collapse="+")
-de.fm1 <- as.formula(paste("joker ~ ", de.dn0))
-de.rm = do.call(cbind, list(sic.val@data["joker"], ov.de))
-## fine-tuning recommended since the variable has highly skewed distribution with 2 hot spots:
-rt.gamma <- makeRegrTask(data = de.rm[complete.cases(de.rm[,all.vars(de.fm1)]),], target = "joker")
-estimateTimeTuneRF(rt.gamma)
-## 8M
-t.gamma <- tuneRF(rt.gamma, build.final.model = FALSE)
-t.gamma
-pars.gamma = list(mtry=t.gamma$recommended.pars$mtry, min.node.size=t.gamma$recommended.pars$min.node.size, sample.fraction=t.gamma$recommended.pars$sample.fraction)
-m1.gamma <- quantregRanger(de.fm1, de.rm[complete.cases(de.rm),], params.ranger = pars.gamma)
-m1.gamma
-## R squared (OOB): 0.11
-gamma.rfd1 <- predict(m1.gamma, de.dist0@data, quantiles)
-de2km$gamma_rfd1 = gamma.rfd1[,2]
-de2km$gamma_rfd1_var = (gamma.rfd1[,3]-gamma.rfd1[,1])/2
-plot(de2km["gamma_rfd1"])
-points(sic.val, pch="+")
-#plot(de2km["gamma_rfd1_var"])
-#pred2km.sic2004 <- interpolate(sic.val, de2km, methodName = "automap")
-#de2km$gamma_ok = pred2km.sic2004$predictions$var1.pred
-#plot(de2km["gamma_ok"])
-#points(sic.val, pch="+")
-ov.test <- over(sic.test, de2km["gamma_rfd1"])
-#plot(sic.test$dayx~ov.test$gamma_rfd1, asp=1)
-sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
-
-## Weighted regression RF ----
-carson <- read.csv(file="data/NRCS/carson_CLYPPT.csv")
-summary(carson$CLYPPT)
-carson$DEPTH.f = ifelse(is.na(carson$DEPTH), 20, carson$DEPTH)
-carson1km <- readRDS("data/NRCS/carson_covs1km.rds")
-coordinates(carson) <- ~X+Y
-proj4string(carson) = carson1km@proj4string
-rm.carson <- cbind(as.data.frame(carson), over(carson["CLYPPT"], carson1km))
-fm.clay <- as.formula(paste("CLYPPT ~ DEPTH.f + ", paste(names(carson1km), collapse = "+")))
-rm.carson <- rm.carson[complete.cases(rm.carson[,all.vars(fm.clay)]),]
-rm.carson.s <- rm.carson[sample.int(size=1250, nrow(rm.carson)),]
-m.clay <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25, case.weights=1/(rm.carson.s$CLYPPT.sd^2)))
-m.clay
-carson1km$DEPTH.f = 30
-clay.rfd <- predict(m.clay, carson1km@data, quantiles)
-carson1km$clay_rfd = ifelse(clay.rfd[,2]<10, 10, ifelse(clay.rfd[,2]>35, 35, clay.rfd[,2]))
-summary(carson1km$clay_rfd)
-carson1km$clay_rfd_var = (clay.rfd[,3]-clay.rfd[,1])/2
-#plot(raster(carson1km["clay_rfd"]), col=plotKML::SAGA_pal[[1]])
-m.clay0 <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25))
-m.clay0
-clay0.rfd <- predict(m.clay0, carson1km@data, quantiles)
-carson1km$clay0_rfd = ifelse(clay0.rfd[,2]<10, 10, ifelse(clay0.rfd[,2]>35, 35, clay0.rfd[,2]))
-carson1km$clay0_rfd_var = (clay0.rfd[,3]-clay0.rfd[,1])/2
-
-pdf(file = "results/NRCS/Fig_clay_RF_weighted.pdf", width=10, height=9)
-par(mfrow=c(2,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
-par(oma=c(0,0,0,0.5), mar=c(0,0,3.5,1))
-plot(raster(carson1km["clay_rfd"]), col=leg, main="RF predictions clay (weigthed)", axes=FALSE, box=FALSE, zlim=c(10,35))
-points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
-plot(raster(carson1km["clay0_rfd"]), col=leg, main="RF predictions clay", axes=FALSE, box=FALSE, zlim=c(10,35))
-points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
-plot(raster(carson1km["clay_rfd_var"]), col=rev(bpy.colors()), main="Prediction error (RF weigthed)", axes=FALSE, box=FALSE, zlim=c(0,28))
-points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
-plot(raster(carson1km["clay0_rfd_var"]), col=rev(bpy.colors()), main="Prediction error (RF)", axes=FALSE, box=FALSE, zlim=c(0,28))
-points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
-dev.off()
-
-
-
-## Ebergotzen binomial variable ----
+## ** Ebergotzen binomial variable --------------------------------------
 data(eberg)
 eb.s = sample.int(nrow(eberg), 1200)
 eberg = eberg[eb.s,]
@@ -516,6 +419,105 @@ T <- geoCorrection(speed)
 acost <- accCost(T, c(3575290.6,5713305.5))
 plot(acost)
 writeRaster(acost, "/data/tmp/acost.sdat", "SAGA", overwrite=TRUE)
+
+
+## ** Intamap example ---------------------------------------------------
+data(sic2004)
+coordinates(sic.val) <- ~x+y
+sic.val$value <- sic.val$joker
+#sic.val$value <- sic.val$dayx
+#writeOGR(sic.val, "results/sic2004/sic.val.shp", "sic.val", "ESRI Shapefile")
+coordinates(sic.test) <- ~x+y
+pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
+#R 2017-12-06 15:00:58 interpolating 200 observations, 808 prediction locations
+#[1] "estimated time for copula 71.2993216100125"
+spplot(pred.sic2004$predictions[1])
+#plot(sic.test$dayx~pred.sic2004$predictions$mean, asp=1)
+#sd(sic.test$dayx-pred.sic2004$predictions$mean)
+## 12.4
+sd(sic.test$joker-pred.sic2004$predictions$mean)
+## 104
+
+## RFsp
+bbox=sic.val@bbox
+bbox[,"min"]=bbox[,"min"]-4000
+bbox[,"max"]=bbox[,"max"]+4000
+de2km = plotKML::vect2rast(sic.val, cell.size=2000, bbox=bbox)
+de2km$mask = 1
+de2km = as(de2km["mask"], "SpatialPixelsDataFrame")
+plot(de2km); points(sic.val)
+hist(sic.val$joker, breaks=45, col="grey")
+which(sic.val$joker>500) ## only 2 points with very high values
+which(sic.test$joker>500)
+de.dist0 <- GSIF::buffer.dist(sic.val["joker"], de2km, as.factor(1:nrow(sic.val@data)))
+ov.de = over(sic.val["joker"], de.dist0)
+de.dn0 <- paste(names(de.dist0), collapse="+")
+de.fm1 <- as.formula(paste("joker ~ ", de.dn0))
+de.rm = do.call(cbind, list(sic.val@data["joker"], ov.de))
+## fine-tuning recommended since the variable has highly skewed distribution with 2 hot spots:
+rt.gamma <- makeRegrTask(data = de.rm[complete.cases(de.rm[,all.vars(de.fm1)]),], target = "joker")
+estimateTimeTuneRF(rt.gamma)
+## 8M
+t.gamma <- tuneRF(rt.gamma, build.final.model = FALSE)
+t.gamma
+pars.gamma = list(mtry=t.gamma$recommended.pars$mtry, min.node.size=t.gamma$recommended.pars$min.node.size, sample.fraction=t.gamma$recommended.pars$sample.fraction)
+m1.gamma <- quantregRanger(de.fm1, de.rm[complete.cases(de.rm),], params.ranger = pars.gamma)
+m1.gamma
+## R squared (OOB): 0.11
+gamma.rfd1 <- predict(m1.gamma, de.dist0@data, quantiles)
+de2km$gamma_rfd1 = gamma.rfd1[,2]
+de2km$gamma_rfd1_var = (gamma.rfd1[,3]-gamma.rfd1[,1])/2
+plot(de2km["gamma_rfd1"])
+points(sic.val, pch="+")
+#plot(de2km["gamma_rfd1_var"])
+#pred2km.sic2004 <- interpolate(sic.val, de2km, methodName = "automap")
+#de2km$gamma_ok = pred2km.sic2004$predictions$var1.pred
+#plot(de2km["gamma_ok"])
+#points(sic.val, pch="+")
+ov.test <- over(sic.test, de2km["gamma_rfd1"])
+#plot(sic.test$dayx~ov.test$gamma_rfd1, asp=1)
+sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
+
+## Weighted regression RF ----
+carson <- read.csv(file="data/NRCS/carson_CLYPPT.csv")
+summary(carson$CLYPPT)
+carson$DEPTH.f = ifelse(is.na(carson$DEPTH), 20, carson$DEPTH)
+carson1km <- readRDS("data/NRCS/carson_covs1km.rds")
+coordinates(carson) <- ~X+Y
+proj4string(carson) = carson1km@proj4string
+rm.carson <- cbind(as.data.frame(carson), over(carson["CLYPPT"], carson1km))
+fm.clay <- as.formula(paste("CLYPPT ~ DEPTH.f + ", paste(names(carson1km), collapse = "+")))
+rm.carson <- rm.carson[complete.cases(rm.carson[,all.vars(fm.clay)]),]
+rm.carson.s <- rm.carson[sample.int(size=1250, nrow(rm.carson)),]
+m.clay <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25, case.weights=1/(rm.carson.s$CLYPPT.sd^2)))
+m.clay
+carson1km$DEPTH.f = 30
+clay.rfd <- predict(m.clay, carson1km@data, quantiles)
+carson1km$clay_rfd = ifelse(clay.rfd[,2]<10, 10, ifelse(clay.rfd[,2]>35, 35, clay.rfd[,2]))
+summary(carson1km$clay_rfd)
+carson1km$clay_rfd_var = (clay.rfd[,3]-clay.rfd[,1])/2
+#plot(raster(carson1km["clay_rfd"]), col=plotKML::SAGA_pal[[1]])
+m.clay0 <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25))
+m.clay0
+clay0.rfd <- predict(m.clay0, carson1km@data, quantiles)
+carson1km$clay0_rfd = ifelse(clay0.rfd[,2]<10, 10, ifelse(clay0.rfd[,2]>35, 35, clay0.rfd[,2]))
+carson1km$clay0_rfd_var = (clay0.rfd[,3]-clay0.rfd[,1])/2
+
+pdf(file = "results/NRCS/Fig_clay_RF_weighted.pdf", width=10, height=9)
+par(mfrow=c(2,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
+par(oma=c(0,0,0,0.5), mar=c(0,0,3.5,1))
+plot(raster(carson1km["clay_rfd"]), col=leg, main="RF predictions clay (weigthed)", axes=FALSE, box=FALSE, zlim=c(10,35))
+points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
+plot(raster(carson1km["clay0_rfd"]), col=leg, main="RF predictions clay", axes=FALSE, box=FALSE, zlim=c(10,35))
+points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
+plot(raster(carson1km["clay_rfd_var"]), col=rev(bpy.colors()), main="Prediction error (RF weigthed)", axes=FALSE, box=FALSE, zlim=c(0,28))
+points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
+plot(raster(carson1km["clay0_rfd_var"]), col=rev(bpy.colors()), main="Prediction error (RF)", axes=FALSE, box=FALSE, zlim=c(0,28))
+points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
+dev.off()
+
+
+
 
 ## Multivariate case ----
 ## Geochemicals USA (https://mrdata.usgs.gov/geochem/)
