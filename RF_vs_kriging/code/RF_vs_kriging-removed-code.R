@@ -125,3 +125,160 @@ abline(h = 1:15, lty = "dotted", col = "grey60")
 points(vv, 1:15)
 axis(2, 1:15, labels = dimnames(vv)[[1]], las = 2)
 dev.off()
+
+
+## ** Ebergotzen binomial variable --------------------------------------
+
+
+
+#par(mfrow=c(1,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
+#plot(raster(eberg_grid["SSE"]), col=rev(bpy.colors()), main="Shannon Scaled Entropy Index", axes=FALSE, box=FALSE)
+#points(eberg[eberg$Parabraunerde=="TRUE"&!is.na(eberg$Parabraunerde)&sel.eberg,], pch=19, cex=.8)
+#points(eberg[eberg$Parabraunerde=="FALSE"&!is.na(eberg$Parabraunerde)&sel.eberg,], pch="+", cex=.8)
+
+
+# This is not in the paper:
+  
+
+## ** Intamap example ---------------------------------------------------
+data(sic2004)
+coordinates(sic.val) <- ~x+y
+sic.val$value <- sic.val$joker
+#sic.val$value <- sic.val$dayx
+#writeOGR(sic.val, "results/sic2004/sic.val.shp", "sic.val", "ESRI Shapefile")
+coordinates(sic.test) <- ~x+y
+pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
+#R 2017-12-06 15:00:58 interpolating 200 observations, 808 prediction locations
+#[1] "estimated time for copula 71.2993216100125"
+spplot(pred.sic2004$predictions[1])
+#plot(sic.test$dayx~pred.sic2004$predictions$mean, asp=1)
+#sd(sic.test$dayx-pred.sic2004$predictions$mean)
+## 12.4
+sd(sic.test$joker-pred.sic2004$predictions$mean)
+## 104
+
+## RFsp
+bbox=sic.val@bbox
+bbox[,"min"]=bbox[,"min"]-4000
+bbox[,"max"]=bbox[,"max"]+4000
+de2km = plotKML::vect2rast(sic.val, cell.size=2000, bbox=bbox)
+de2km$mask = 1
+de2km = as(de2km["mask"], "SpatialPixelsDataFrame")
+plot(de2km); points(sic.val)
+hist(sic.val$joker, breaks=45, col="grey")
+which(sic.val$joker>500) ## only 2 points with very high values
+which(sic.test$joker>500)
+de.dist0 <- GSIF::buffer.dist(sic.val["joker"], de2km, as.factor(1:nrow(sic.val@data)))
+ov.de = over(sic.val["joker"], de.dist0)
+de.dn0 <- paste(names(de.dist0), collapse="+")
+de.fm1 <- as.formula(paste("joker ~ ", de.dn0))
+de.rm = do.call(cbind, list(sic.val@data["joker"], ov.de))
+## fine-tuning recommended since the variable has highly skewed distribution with 2 hot spots:
+rt.gamma <- makeRegrTask(data = de.rm[complete.cases(de.rm[,all.vars(de.fm1)]),], target = "joker")
+estimateTimeTuneRF(rt.gamma)
+## 8M
+t.gamma <- tuneRF(rt.gamma, build.final.model = FALSE)
+t.gamma
+pars.gamma = list(mtry=t.gamma$recommended.pars$mtry, min.node.size=t.gamma$recommended.pars$min.node.size, sample.fraction=t.gamma$recommended.pars$sample.fraction)
+m1.gamma <- quantregRanger(de.fm1, de.rm[complete.cases(de.rm),], params.ranger = pars.gamma)
+m1.gamma
+## R squared (OOB): 0.11
+gamma.rfd1 <- predict(m1.gamma, de.dist0@data, quantiles)
+de2km$gamma_rfd1 = gamma.rfd1[,2]
+de2km$gamma_rfd1_var = (gamma.rfd1[,3]-gamma.rfd1[,1])/2
+plot(de2km["gamma_rfd1"])
+points(sic.val, pch="+")
+#plot(de2km["gamma_rfd1_var"])
+#pred2km.sic2004 <- interpolate(sic.val, de2km, methodName = "automap")
+#de2km$gamma_ok = pred2km.sic2004$predictions$var1.pred
+#plot(de2km["gamma_ok"])
+#points(sic.val, pch="+")
+ov.test <- over(sic.test, de2km["gamma_rfd1"])
+#plot(sic.test$dayx~ov.test$gamma_rfd1, asp=1)
+sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
+
+
+
+## Ebergotzen weighted RF (usually measurement error or sampling probability) ----
+## Estimate occurrence probability
+data(eberg)
+coordinates(eberg) <- ~X+Y
+proj4string(eberg) <- CRS("+init=epsg:31467")
+ov.eberg <- over(eberg, eberg_grid)
+sel.eberg = !is.na(ov.eberg$DEMSRT6)
+eberg.xy <- eberg[sel.eberg,"CLYMHT_B"]
+sprob <- spsample.prob(eberg.xy, eberg_grid[paste0("PC", 1:10)])
+ov.ebergS <- over(eberg.xy, eberg_grid[paste0("PC", 1:10)])
+rm.ebergS <- do.call(cbind, list(eberg.xy@data, ov.ebergS, over(eberg.xy, sprob[[1]])))
+fs <- as.formula(paste("CLYMHT_B ~ ", paste(paste0("PC", 1:10), collapse="+")))
+## the lower the occurrence probability, the higher the weight:
+rm.ebergS <- rm.ebergS[complete.cases(rm.ebergS[,all.vars(fs)]),]
+m.CLYw <- quantregRanger(fs, rm.ebergS, list(importance='impurity', case.weights=1/rm.ebergS$iprob))
+m.CLYw
+## R squared (OOB): 0.53
+m.CLYn <- quantregRanger(fs, rm.ebergS, list(importance='impurity'))
+## Compare predictions:
+CLY.rfw <- predict(m.CLYw, eberg_grid@data, quantiles)
+eberg_grid$CLY_rfw <- CLY.rfw[,2]
+summary(eberg_grid$CLY_rfw)
+eberg_grid$CLY_rfw_var <- (CLY.rfw[,3]-CLY.rfw[,1])/2
+CLY.rfn <- predict(m.CLYn, eberg_grid@data, quantiles)
+eberg_grid$CLY_rfn <- CLY.rfn[,2]
+eberg_grid$CLY_rfn_var <- (CLY.rfn[,3]-CLY.rfn[,1])/2
+## compare with pure random sampling
+rnd <- spsample(eberg_grid, type="random", n=length(sprob[["observations"]]))
+sprob2 <- spsample.prob(rnd, eberg_grid[paste0("PC", 1:10)])
+
+pdf(file = "results/eberg/Fig_clay_RF_weighted.pdf", width=11, height=6.5)
+par(mfrow=c(2,3), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
+par(oma=c(0,0,0,0.5), mar=c(0,0,3.5,1))
+plot(raster(sprob[[1]]), col=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,1), main="Occurrence probability", axes=FALSE, box=FALSE)
+points(eberg.xy, pch="+", cex=.8)
+plot(raster(eberg_grid["CLY_rfn"]), col=leg, main="RF predictions clay", axes=FALSE, box=FALSE, zlim=c(0,55))
+plot(raster(eberg_grid["CLY_rfw"]), col=leg, main="RF predictions clay (weigthed)", axes=FALSE, box=FALSE, zlim=c(0,55))
+plot(raster(sprob2[[1]]), col=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,1), main="Occurrence probability", axes=FALSE, box=FALSE)
+points(rnd, pch="+", cex=.8)
+plot(raster(eberg_grid["CLY_rfn_var"]), col=rev(bpy.colors()), main="Prediction error (RF)", axes=FALSE, box=FALSE, zlim=c(0,28))
+plot(raster(eberg_grid["CLY_rfw_var"]), col=rev(bpy.colors()), main="Prediction error (RF weigthed)", axes=FALSE, box=FALSE, zlim=c(0,28))
+dev.off()
+
+## Deriving more complex distances ----
+#writeGDAL(eberg_grid["DEMSRT6"], "/data/tmp/DEMSRT6.sdat", "SAGA")
+r <- raster(eberg_grid["DEMSRT6"])
+hd <- transition(r, function(x){x[2] - x[1]}, 8, symm=FALSE)
+slope <- geoCorrection(hd)
+adj <- adjacent(r, cells=1:ncell(r), pairs=TRUE, directions=8)
+speed <- slope
+speed[adj] <- 6 * exp(-3.5 * abs(slope[adj] + 0.05))
+T <- geoCorrection(speed)
+acost <- accCost(T, c(3575290.6,5713305.5))
+plot(acost)
+writeRaster(acost, "/data/tmp/acost.sdat", "SAGA", overwrite=TRUE)
+
+
+## ** Geochemical USA - Multivariate case -----------------------------------
+
+bubble(geochem[!is.na(geochem$PB_ICP40),"PB_ICP40"])
+bubble(geochem[!is.na(geochem$CU_ICP40),"CU_ICP40"])
+bubble(geochem[!is.na(geochem$K_ICP40),"K_ICP40"])
+bubble(geochem[!is.na(geochem$MG_ICP40),"MG_ICP40"])
+
+#writeOGR(geochem, "geochem.shp", "geochem", "ESRI Shapefile")
+
+#str(rm.geochem)
+hist(log1p(rm.geochem$Y))
+summary(as.factor(rm.geochem$TYPE))
+
+
+## ** Spatiotemporal prediction using Random Forest ------------------------
+
+hist(co_prec$cdate)
+hist(co_prec$doy)
+
+plot(raster(co_grids[1]))
+points(co_locs.sp, pch="+")
+
+
+#bubble(co_locs.sp[!is.na(co_locs.sp$x),"x"])
+
+#plot(stack(grid.distP[1:3]))

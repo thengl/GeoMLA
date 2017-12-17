@@ -309,7 +309,7 @@ eb.dn0 <- paste(names(eberg.dist0), collapse="+")
 eb.fm1 <- as.formula(paste("Parabraunerde ~ ", eb.dn0, "+", paste0("PC", 1:10, collapse = "+")))
 ov.eberg3 <- over(eberg[sel.eberg,"Parabraunerde"], eberg_grid[paste0("PC", 1:10)])
 rm.eberg2 = do.call(cbind, list(eberg@data[sel.eberg,c("Parabraunerde","TAXGRSC")], ov.eberg2, ov.eberg3))
-m1.Parabraunerde <- ranger(eb.fm1, rm.eberg2[complete.cases(rm.eberg2),], importance = "impurity", probability = TRUE)
+m1.Parabraunerde <- ranger(eb.fm1, rm.eberg2[complete.cases(rm.eberg2),], importance = "impurity", probability = TRUE, seed = 1)
 m1.Parabraunerde
 ## Seems to be quite an accurate model
 xl1.P <- as.list(ranger::importance(m1.Parabraunerde))
@@ -321,14 +321,10 @@ eberg_grid$Parabraunerde_FALSE = pr.Parabraunerde$predictions[,1]
 eberg_grid$SSE = entropy_index(eberg_grid@data[,c("Parabraunerde_TRUE","Parabraunerde_FALSE")])
 
 pdf(file = "results/eberg/Fig_Parabraunerde_RF.pdf", width=7, height=6.5)
-#par(mfrow=c(1,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
 par(oma=c(0,0,0,0.5), mar=c(0,0,3.5,1))
 plot(raster(eberg_grid["Parabraunerde_TRUE"]), col=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,1), main="Parabraunerde class (RF)", axes=FALSE, box=FALSE)
 points(eberg[eberg$Parabraunerde=="TRUE"&!is.na(eberg$Parabraunerde)&sel.eberg,], pch=19, cex=.5)
 points(eberg[eberg$Parabraunerde=="FALSE"&!is.na(eberg$Parabraunerde)&sel.eberg,], pch="+", cex=.8)
-#plot(raster(eberg_grid["SSE"]), col=rev(bpy.colors()), main="Shannon Scaled Entropy Index", axes=FALSE, box=FALSE)
-#points(eberg[eberg$Parabraunerde=="TRUE"&!is.na(eberg$Parabraunerde)&sel.eberg,], pch=19, cex=.8)
-#points(eberg[eberg$Parabraunerde=="FALSE"&!is.na(eberg$Parabraunerde)&sel.eberg,], pch="+", cex=.8)
 dev.off()
 
 ## predict ALL soil types:
@@ -364,121 +360,8 @@ kml(raster(r.P), folder.name="Parabraunerde", raster_name="results/eberg/eberg_P
 kml(eberg_grid["SSE_t"], folder.name="SSE", raster_name="results/eberg/eberg_SEE.png", file.name="results/eberg/eberg_SEE.kml", colour_scale=rev(bpy.colors()), zlim=c(0,100), png.type="cairo")
 ## Conclusion: looks like regression-kriging on class probs
 
-## Ebergotzen weighted RF (usually measurement error or sampling probability) ----
-## Estimate occurrence probability
-data(eberg)
-coordinates(eberg) <- ~X+Y
-proj4string(eberg) <- CRS("+init=epsg:31467")
-ov.eberg <- over(eberg, eberg_grid)
-sel.eberg = !is.na(ov.eberg$DEMSRT6)
-eberg.xy <- eberg[sel.eberg,"CLYMHT_B"]
-sprob <- spsample.prob(eberg.xy, eberg_grid[paste0("PC", 1:10)])
-ov.ebergS <- over(eberg.xy, eberg_grid[paste0("PC", 1:10)])
-rm.ebergS <- do.call(cbind, list(eberg.xy@data, ov.ebergS, over(eberg.xy, sprob[[1]])))
-fs <- as.formula(paste("CLYMHT_B ~ ", paste(paste0("PC", 1:10), collapse="+")))
-## the lower the occurrence probability, the higher the weight:
-rm.ebergS <- rm.ebergS[complete.cases(rm.ebergS[,all.vars(fs)]),]
-m.CLYw <- quantregRanger(fs, rm.ebergS, list(importance='impurity', case.weights=1/rm.ebergS$iprob))
-m.CLYw
-## R squared (OOB): 0.53
-m.CLYn <- quantregRanger(fs, rm.ebergS, list(importance='impurity'))
-## Compare predictions:
-CLY.rfw <- predict(m.CLYw, eberg_grid@data, quantiles)
-eberg_grid$CLY_rfw <- CLY.rfw[,2]
-summary(eberg_grid$CLY_rfw)
-eberg_grid$CLY_rfw_var <- (CLY.rfw[,3]-CLY.rfw[,1])/2
-CLY.rfn <- predict(m.CLYn, eberg_grid@data, quantiles)
-eberg_grid$CLY_rfn <- CLY.rfn[,2]
-eberg_grid$CLY_rfn_var <- (CLY.rfn[,3]-CLY.rfn[,1])/2
-## compare with pure random sampling
-rnd <- spsample(eberg_grid, type="random", n=length(sprob[["observations"]]))
-sprob2 <- spsample.prob(rnd, eberg_grid[paste0("PC", 1:10)])
 
-pdf(file = "results/eberg/Fig_clay_RF_weighted.pdf", width=11, height=6.5)
-par(mfrow=c(2,3), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
-par(oma=c(0,0,0,0.5), mar=c(0,0,3.5,1))
-plot(raster(sprob[[1]]), col=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,1), main="Occurrence probability", axes=FALSE, box=FALSE)
-points(eberg.xy, pch="+", cex=.8)
-plot(raster(eberg_grid["CLY_rfn"]), col=leg, main="RF predictions clay", axes=FALSE, box=FALSE, zlim=c(0,55))
-plot(raster(eberg_grid["CLY_rfw"]), col=leg, main="RF predictions clay (weigthed)", axes=FALSE, box=FALSE, zlim=c(0,55))
-plot(raster(sprob2[[1]]), col=SAGA_pal[["SG_COLORS_YELLOW_RED"]], zlim=c(0,1), main="Occurrence probability", axes=FALSE, box=FALSE)
-points(rnd, pch="+", cex=.8)
-plot(raster(eberg_grid["CLY_rfn_var"]), col=rev(bpy.colors()), main="Prediction error (RF)", axes=FALSE, box=FALSE, zlim=c(0,28))
-plot(raster(eberg_grid["CLY_rfw_var"]), col=rev(bpy.colors()), main="Prediction error (RF weigthed)", axes=FALSE, box=FALSE, zlim=c(0,28))
-dev.off()
-
-## Deriving more complex distances ----
-#writeGDAL(eberg_grid["DEMSRT6"], "/data/tmp/DEMSRT6.sdat", "SAGA")
-r <- raster(eberg_grid["DEMSRT6"])
-hd <- transition(r, function(x){x[2] - x[1]}, 8, symm=FALSE)
-slope <- geoCorrection(hd)
-adj <- adjacent(r, cells=1:ncell(r), pairs=TRUE, directions=8)
-speed <- slope
-speed[adj] <- 6 * exp(-3.5 * abs(slope[adj] + 0.05))
-T <- geoCorrection(speed)
-acost <- accCost(T, c(3575290.6,5713305.5))
-plot(acost)
-writeRaster(acost, "/data/tmp/acost.sdat", "SAGA", overwrite=TRUE)
-
-
-## ** Intamap example ---------------------------------------------------
-data(sic2004)
-coordinates(sic.val) <- ~x+y
-sic.val$value <- sic.val$joker
-#sic.val$value <- sic.val$dayx
-#writeOGR(sic.val, "results/sic2004/sic.val.shp", "sic.val", "ESRI Shapefile")
-coordinates(sic.test) <- ~x+y
-pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
-#R 2017-12-06 15:00:58 interpolating 200 observations, 808 prediction locations
-#[1] "estimated time for copula 71.2993216100125"
-spplot(pred.sic2004$predictions[1])
-#plot(sic.test$dayx~pred.sic2004$predictions$mean, asp=1)
-#sd(sic.test$dayx-pred.sic2004$predictions$mean)
-## 12.4
-sd(sic.test$joker-pred.sic2004$predictions$mean)
-## 104
-
-## RFsp
-bbox=sic.val@bbox
-bbox[,"min"]=bbox[,"min"]-4000
-bbox[,"max"]=bbox[,"max"]+4000
-de2km = plotKML::vect2rast(sic.val, cell.size=2000, bbox=bbox)
-de2km$mask = 1
-de2km = as(de2km["mask"], "SpatialPixelsDataFrame")
-plot(de2km); points(sic.val)
-hist(sic.val$joker, breaks=45, col="grey")
-which(sic.val$joker>500) ## only 2 points with very high values
-which(sic.test$joker>500)
-de.dist0 <- GSIF::buffer.dist(sic.val["joker"], de2km, as.factor(1:nrow(sic.val@data)))
-ov.de = over(sic.val["joker"], de.dist0)
-de.dn0 <- paste(names(de.dist0), collapse="+")
-de.fm1 <- as.formula(paste("joker ~ ", de.dn0))
-de.rm = do.call(cbind, list(sic.val@data["joker"], ov.de))
-## fine-tuning recommended since the variable has highly skewed distribution with 2 hot spots:
-rt.gamma <- makeRegrTask(data = de.rm[complete.cases(de.rm[,all.vars(de.fm1)]),], target = "joker")
-estimateTimeTuneRF(rt.gamma)
-## 8M
-t.gamma <- tuneRF(rt.gamma, build.final.model = FALSE)
-t.gamma
-pars.gamma = list(mtry=t.gamma$recommended.pars$mtry, min.node.size=t.gamma$recommended.pars$min.node.size, sample.fraction=t.gamma$recommended.pars$sample.fraction)
-m1.gamma <- quantregRanger(de.fm1, de.rm[complete.cases(de.rm),], params.ranger = pars.gamma)
-m1.gamma
-## R squared (OOB): 0.11
-gamma.rfd1 <- predict(m1.gamma, de.dist0@data, quantiles)
-de2km$gamma_rfd1 = gamma.rfd1[,2]
-de2km$gamma_rfd1_var = (gamma.rfd1[,3]-gamma.rfd1[,1])/2
-plot(de2km["gamma_rfd1"])
-points(sic.val, pch="+")
-#plot(de2km["gamma_rfd1_var"])
-#pred2km.sic2004 <- interpolate(sic.val, de2km, methodName = "automap")
-#de2km$gamma_ok = pred2km.sic2004$predictions$var1.pred
-#plot(de2km["gamma_ok"])
-#points(sic.val, pch="+")
-ov.test <- over(sic.test, de2km["gamma_rfd1"])
-#plot(sic.test$dayx~ov.test$gamma_rfd1, asp=1)
-sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
-
-## Weighted regression RF ----
+## ** NRCS: Weighted regression RF -------------------------------------
 carson <- read.csv(file="data/NRCS/carson_CLYPPT.csv")
 summary(carson$CLYPPT)
 carson$DEPTH.f = ifelse(is.na(carson$DEPTH), 20, carson$DEPTH)
@@ -496,8 +379,7 @@ clay.rfd <- predict(m.clay, carson1km@data, quantiles)
 carson1km$clay_rfd = ifelse(clay.rfd[,2]<10, 10, ifelse(clay.rfd[,2]>35, 35, clay.rfd[,2]))
 summary(carson1km$clay_rfd)
 carson1km$clay_rfd_var = (clay.rfd[,3]-clay.rfd[,1])/2
-#plot(raster(carson1km["clay_rfd"]), col=plotKML::SAGA_pal[[1]])
-m.clay0 <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25))
+m.clay0 <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25, seed = 1))
 m.clay0
 clay0.rfd <- predict(m.clay0, carson1km@data, quantiles)
 carson1km$clay0_rfd = ifelse(clay0.rfd[,2]<10, 10, ifelse(clay0.rfd[,2]>35, 35, clay0.rfd[,2]))
@@ -517,22 +399,15 @@ points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
 dev.off()
 
 
-
-
-## Multivariate case ----
+## ** Geochemical USA - Multivariate case -----------------------------------
 ## Geochemicals USA (https://mrdata.usgs.gov/geochem/)
 geochem = readRDS("data/geochem/geochem.rds")
 ## negative values are in fact detection limits:
 for(i in c("PB_ICP40","CU_ICP40","K_ICP40","MG_ICP40")) { geochem[,i] = ifelse(geochem[,i] < 0, abs(geochem[,i])/2, geochem[,i])  }
 coordinates(geochem) = ~coords.x1 + coords.x2
 proj4string(geochem) = "+proj=longlat +ellps=clrk66 +towgs84=-9.0,151.0,185.0,0.0,0.0,0.0,0.0 +no_defs"
-bubble(geochem[!is.na(geochem$PB_ICP40),"PB_ICP40"])
-bubble(geochem[!is.na(geochem$CU_ICP40),"CU_ICP40"])
-bubble(geochem[!is.na(geochem$K_ICP40),"K_ICP40"])
-bubble(geochem[!is.na(geochem$MG_ICP40),"MG_ICP40"])
 geochem$TYPEDESC = as.factor(paste(geochem$TYPEDESC))
 summary(geochem$TYPEDESC)
-#writeOGR(geochem, "geochem.shp", "geochem", "ESRI Shapefile")
 usa5km = readRDS("data/geochem/usa5km.rds")
 str(usa5km@data)
 geochem = spTransform(geochem, CRS(proj4string(usa5km)))
@@ -545,16 +420,13 @@ for(i in t.vars){colnames(df.lst[[i]])[1] = "Y"}
 for(i in t.vars){df.lst[[i]]$TYPE = i}
 ## All variables now with the same name:
 rm.geochem = do.call(rbind, df.lst)
-#str(rm.geochem)
-hist(log1p(rm.geochem$Y))
-summary(as.factor(rm.geochem$TYPE))
 type.mat = data.frame(model.matrix(~TYPE-1, rm.geochem))
 typed.mat = data.frame(model.matrix(~TYPEDESC-1, rm.geochem))
 ## Final regression matrix
 rm.geochem.e = do.call(cbind, list(rm.geochem[,c("Y",paste0("PC",1:21))], type.mat, typed.mat))
 fm.g = as.formula(paste0("Y ~ ", paste0(names(rm.geochem.e)[-1], collapse = "+")))
 fm.g
-m1.geochem <- ranger::ranger(fm.g, rm.geochem.e[complete.cases(rm.geochem.e),], importance = "impurity")
+m1.geochem <- ranger::ranger(fm.g, rm.geochem.e[complete.cases(rm.geochem.e),], importance = "impurity", seed = 1)
 m1.geochem
 xl1.g <- as.list(ranger::importance(m1.geochem))
 print(t(data.frame(xl1.g[order(unlist(xl1.g), decreasing=TRUE)[1:15]])))
@@ -589,7 +461,7 @@ points(geochem[!is.na(geochem$MG_ICP40),], pch="+", cex=.5)
 dev.off()
 
 
-## Spatiotemporal prediction using Random Forest ----
+## ** Spatiotemporal prediction using Random Forest ------------------------
 ## Daily precipitation obtained from https://www.ncdc.noaa.gov/cdo-web/search
 ## compare with: https://www.r-bloggers.com/part-4a-modelling-predicting-the-amount-of-rain/
 ## NCDC data access explained at: http://neondataskills.org/R/COOP-precip-data-R
@@ -599,10 +471,8 @@ str(co_prec)
 summary(co_prec$PRCP)
 ## Derive cumulative day:
 co_prec$cdate = floor(unclass(as.POSIXct(as.POSIXct(paste(co_prec$DATE), format="%Y-%m-%d")))/86400)
-hist(co_prec$cdate)
 ## Day of the year:
 co_prec$doy = as.integer(strftime(as.POSIXct(paste(co_prec$DATE), format="%Y-%m-%d"), format = "%j"))
-hist(co_prec$doy)
 
 co_locs.sp = co_prec[!duplicated(co_prec$STATION),c("STATION","LATITUDE","LONGITUDE")]
 coordinates(co_locs.sp) = ~ LONGITUDE + LATITUDE
@@ -611,30 +481,33 @@ proj4string(co_locs.sp) = CRS("+proj=longlat +datum=WGS84")
 co_grids = readRDS("data/st_prec/boulder_grids.rds")
 co_grids = as(co_grids, "SpatialPixelsDataFrame")
 co_locs.sp = spTransform(co_locs.sp, co_grids@proj4string)
-plot(raster(co_grids[1]))
-points(co_locs.sp, pch="+")
 ## overlay:
 sel.co <- over(co_locs.sp, co_grids[1])
 co_locs.sp <- co_locs.sp[!is.na(sel.co$elev_1km),]
 T.lst = paste0("2016-02-0", c(1:6))
 for(i in 1:length(T.lst)){
   co_locs.sp$x = plyr::join(co_locs.sp@data, co_prec[co_prec$DATE==T.lst[i], c("STATION","PRCP")])$PRCP
-  #bubble(co_locs.sp[!is.na(co_locs.sp$x),"x"])
   writeOGR(co_locs.sp, paste0("results/st_prec/co_prec_", T.lst[i], ".shp"), paste0("co_prec_", T.lst[i]), "ESRI Shapefile")
 }
 ## Geographic distances only:
 grid.distP <- GSIF::buffer.dist(co_locs.sp["STATION"], co_grids[1], as.factor(1:nrow(co_locs.sp)))
-#plot(stack(grid.distP[1:3]))
 dnP <- paste(names(grid.distP), collapse="+")
 ## spacetime hybrid RF model:
 fmP <- as.formula(paste("PRCP ~ cdate + doy + elev_1km + PRISM_prec +", dnP))
 #fmP0 <- as.formula(paste("PRCP ~ cdate + doy + elev_1km + PRISM_prec"))
 ov.prec <- do.call(cbind, list(co_locs.sp@data, over(co_locs.sp, grid.distP), over(co_locs.sp, co_grids[c("elev_1km","PRISM_prec")])))
 rm.prec <- plyr::join(co_prec, ov.prec)
-rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]),]
+rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]), all.vars(fmP)]
 ## 'data.frame':	157870 obs. of 246 variables
-m1.prec <- quantregRanger(fmP, rm.prec[sample.int(size = 1e4, n = nrow(rm.prec)),], list(importance = "impurity", num.trees = 150, mtry = 180))
-#m1.prec <- quantregRanger(fmP, rm.prec, list(importance = "impurity", num.trees = 150, mtry = 180))
+# rt.prec <- makeRegrTask(data = rm.prec, target = "PRCP")
+# estimateTimeTuneRF(rt.prec, num.threads = 88)
+# # Time consuming >> do on number cruncher
+# set.seed(1)
+# t.prec <- tuneRF(rt.prec, num.trees = 150, build.final.model = FALSE)
+# pars.prec = list(mtry= t.prec$recommended.pars$mtry, min.node.size=t.prec$recommended.pars$min.node.size, sample.fraction=t.prec$recommended.pars$sample.fraction, num.trees=150, importance = "impurity", seed = 1)
+pars.prec = list(mtry= to.come, min.node.size= to.come, sample.fraction=to.come, num.trees=150, seed = 1)
+# m1.prec <- quantregRanger(fmP, rm.prec[sample.int(size = 1e4, n = nrow(rm.prec)),], list(importance = "impurity", num.trees = 150, mtry = 180, seed = 1))
+m1.prec <- quantregRanger(fmP, rm.prec, pars.prec)
 ## mtry needs to be set HIGH --- the higher the better, but this increases computational intensity
 ## For mtry < 20 R-square is close to 0!!
 ## TAKES 10 minutes on 8-cores Lenovo Legion
