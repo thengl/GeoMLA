@@ -47,34 +47,14 @@ axis.ls = list(at=c(4.8,5.7,6.5,7.4), labels=round(expm1(c(4.8,5.7,6.5,7.4))))
 ## 1 s.d. quantiles
 quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2)
 
-## Load the Meuse data set:
+
+## ** Example Meuse data set ----------------------------------------------
 demo(meuse, echo=FALSE)
-## Compare GLM vs RF ----
-m <- glm(zinc~log1p(dist)+ffreq, meuse, family=gaussian(link=log))
-plot(m$fitted.values~m$y, asp=1)
-abline(0,1)
-set.seed(1)
-rf <- quantregForest(x=meuse@data[,c("dist","ffreq")], y=meuse$zinc)
-plot(rf$predicted~rf$y, asp=1)
-abline(0,1)
-meuse.grid$glm.zinc <- predict(m, meuse.grid@data, type="response")
-meuse.grid$rf.zinc <- predict(rf, meuse.grid@data)[,2]
-## Plot predictions next to each other:
-meuse.grid$glm.zinc = ifelse(meuse.grid$glm.zinc<expm1(4.8), expm1(4.8), meuse.grid$glm.zinc)
-png(file = "results/meuse/Fig_comparison_GLM_RF_zinc_meuse.png", res = 150, width = 1750, height = 1200)
-par(mfrow=c(1,2), oma=c(0,0,0,0))
-plot(log1p(raster(meuse.grid["glm.zinc"])), col=leg, zlim=c(4.8,7.4), main="GLM")
-points(meuse, pch="+")
-plot(log1p(raster(meuse.grid["rf.zinc"])), col=leg, zlim=c(4.8,7.4), main="Random Forest")
-points(meuse, pch="+")
-dev.off()
-## TH: Very similar
 
 ## Zinc predicted using ordinary kriging ----
-library(geoR)
 zinc.geo <- as.geodata(meuse["zinc"])
-#plot(variog4(zinc.geo, lambda=0, max.dist=1500, messages=FALSE), lwd=2)
-zinc.vgm <- likfit(zinc.geo, lambda=0, messages=FALSE, ini=c(var(log1p(zinc.geo$data)),500), cov.model="exponential")
+ini.v <- c(var(log1p(zinc.geo$data)),500)
+zinc.vgm <- likfit(zinc.geo, lambda=0, ini=ini.v, cov.model="exponential")
 locs = meuse.grid@coords
 zinc.ok <- krige.conv(zinc.geo, locations=locs, krige=krige.control(obj.model=zinc.vgm))
 meuse.grid$zinc_ok = zinc.ok$predict
@@ -90,85 +70,39 @@ ov.zinc <- over(meuse["zinc"], grid.dist0)
 rm.zinc <- cbind(meuse@data["zinc"], ov.zinc)
 rt.zinc <- makeRegrTask(data = rm.zinc, target = "zinc")
 estimateTimeTuneRF(rt.zinc)
+# Make reproducible tuning
+set.seed(1)
 t.zinc <- tuneRF(rt.zinc, num.trees = 150, build.final.model = FALSE)
 t.zinc
+## With seed = 1. 
 # Recommended parameter settings: 
 #   mtry min.node.size sample.fraction
-# 1  152             4       0.9950361
+# 1   98             4       0.9259533
 # Results: 
 #   mse exec.time
-# 1 59988.75    0.1728
-pars.zinc = list(mtry= t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150)
+# 1 60471.79    0.2716
+pars.zinc = list(mtry= t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150, seed = 1)
 m.zinc <- quantregRanger(fm0, rm.zinc, params.ranger = pars.zinc)
 m.zinc
 zinc.rfd <- predict(m.zinc, grid.dist0@data, quantiles)
 meuse.grid$zinc_rfd = zinc.rfd[,2]
 ## Prediction error:
 meuse.grid$zinc_rfd_var = (zinc.rfd[,3]-zinc.rfd[,1])/2
-summary(meuse.grid$zinc_rfd_var)
-## Median = 123.6
-## Compare with the prediction error derived using the ranger package:
-m.zinc.r <- ranger(fm0, rm.zinc, keep.inbag = TRUE)
-zinc.rfdR <- predict(m.zinc.r, grid.dist0@data, type="se")
-## Prediction error:
-meuse.grid$zinc_rfdR_var =  sqrt(zinc.rfdR$se^2 + var(m.zinc.r$predictions-meuse$zinc))
-summary(meuse.grid$zinc_rfdR_var)
-## Much higher than what we get with the "quantregRanger"
 
-## RF and coordinates as covariates only ----
+
+## RF and coordinates as covariates only (to be fair, same tuning) ----
 fmc <- zinc ~ x + y
+rm.zinc.coord <- cbind(meuse@data["zinc"], meuse@coords)
+rt.zinc.coord <- makeRegrTask(data = rm.zinc.coord, target = "zinc")
 set.seed(1)
-m.zinc.coords <- quantregRanger(fmc, cbind(meuse@data["zinc"], meuse@coords))
-m.zinc.coords
-## R-squared still quite high 0.47!
-zinc.rfc <- predict(m.zinc.coords, meuse.grid@coords, quantiles)
+t.zinc.coord <- tuneRF(rt.zinc.coord, num.trees = 150, build.final.model = FALSE)
+pars.zinc.coord = list(mtry= t.zinc.coord$recommended.pars$mtry, min.node.size=t.zinc.coord$recommended.pars$min.node.size, sample.fraction=t.zinc.coord$recommended.pars$sample.fraction, num.trees=150, seed = 1)
+m.zinc.coord <- quantregRanger(fmc, rm.zinc.coord, params.ranger = pars.zinc.coord)
+m.zinc.coord
+## R-squared still quite high 0.538!
+zinc.rfc <- predict(m.zinc.coord, meuse.grid@coords, quantiles)
 meuse.grid$zinc_rfc = zinc.rfc[,2]
 meuse.grid$zinc_rfc_var = (zinc.rfc[,3]-zinc.rfc[,1])/2
-## Plot
-png(file = "results/meuse/Fig_RF_zinc_coordinates_only.png", res = 150, width = 1750, height = 1200)
-par(mfrow=c(1,2), oma=c(0,0,0,0))
-plot(log1p(raster(meuse.grid["zinc_rfc"])), col=leg, zlim=c(4.8,7.4), main="RF coordinates only", axes=FALSE, box=FALSE, axis.args=axis.ls)
-points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfc_var"]), main="Prediction error", col=rev(bpy.colors()), axes=FALSE, box=FALSE)
-points(meuse, pch="+")
-dev.off()
-
-## RF with noise data ----
-xN = cbind(meuse@data["zinc"], ov.zinc)
-xN$zinc = runif(length(xN$zinc))
-m.zincN <- quantregRanger(fm0, xN)
-m.zincN
-## Correclty R-square close to 0
-zinc.rfdN <- predict(m.zincN, grid.dist0@data, quantiles)
-meuse.grid$zinc_rfdN = zinc.rfdN[,2]
-meuse.grid$zinc_rfd_varN = (zinc.rfdN[,3]-zinc.rfdN[,1])/2
-summary(meuse.grid$zinc_rfd_varN)
-## 2nd try:
-xN$zinc = runif(length(xN$zinc))
-m.zincN2 <- quantregRanger(fm0, xN)
-zinc.rfdN2 <- predict(m.zincN2, grid.dist0@data, quantiles)
-meuse.grid$zinc_rfdN2 = zinc.rfdN2[,2]
-meuse.grid$zinc_rfd_varN2 = (zinc.rfdN2[,3]-zinc.rfdN2[,1])/2
-## The expected mean and the se around the mean is:
-mean(xN$zinc)
-sqrt(var(xN$zinc - 0.5))
-## 0.28
-mean(meuse.grid$zinc_rfd_varN)
-## 0.29
-## Matches exactly s.d. from uniform distribution
-
-## Plot 2 realizations:
-png(file = "results/meuse/Fig_RF_zinc_pure_noise.png", res = 150, width = 1750, height = 1600)
-par(mfrow=c(2,2), oma=c(0,0,0,1), mar=c(0,0,4,3))
-plot(raster(meuse.grid["zinc_rfdN"]), col=leg, zlim=c(0,1), main="RF predictions (pure noise) 1", axes=FALSE, box=FALSE)
-points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfd_varN"]), col=rev(bpy.colors()), main="RF prediction error 1", axes=FALSE, box=FALSE, zlim=c(0.1,.43))
-points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfdN2"]), col=leg, zlim=c(0,1), main="RF predictions (pure noise) 2", axes=FALSE, box=FALSE)
-points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfd_varN2"]), col=rev(bpy.colors()), main="RF prediction error 2", axes=FALSE, box=FALSE, zlim=c(0.1,.43))
-points(meuse, pch="+")
-dev.off()
 
 ## Plot predictions UK and RF next to each other:
 pdf(file = "results/meuse/Fig_comparison_OK_RF_zinc_meuse.pdf", width=9.5, height=8)
@@ -195,19 +129,18 @@ cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="r
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
 cv.RF$Summary$RMSE^2/var(meuse$zinc, na.rm = TRUE); cv.RF$Summary$R.squared; cv.RF$Summary$ZSV; cv.RF$Summary$MAE.SE
 cv.OK$Summary$RMSE^2/var(meuse$zinc, na.rm = TRUE); cv.OK$Summary$R.squared; cv.OK$Summary$ZSV; cv.OK$Summary$MAE.SE
-## Plot residuals vgm:
-x = plyr::join_all(list(data.frame(r1=cv.RF$CV_residuals$Observed-cv.RF$CV_residuals$Predicted, id=cv.RF$CV_residuals$SOURCEID), data.frame(r2=cv.OK$CV_residuals$Observed-cv.OK$CV_residuals$Predicted, id=cv.OK$CV_residuals$SOURCEID)))
-x = plyr::join(x, data.frame(id=row.names(meuse@data), zinc=meuse$zinc, x=meuse@coords[,1], y=meuse@coords[,2]))
-plot_vgm(zinc~1, x, meuse.grid, r1="r1", r2="r2", main="Zinc (Meuse)")
 
-## Compare with the standard error of the mean:
-sqrt(var(meuse$zinc)/nrow(meuse))
 ## plot results
 lim.zinc = range(meuse$zinc, na.rm = TRUE)
 pdf(file = "results/meuse/Fig_correlation_plots_OK_RF_zinc_meuse.pdf", width=9, height=5)
 par(oma=c(0,0,0,1), mar=c(0,0,0,2))
-plt.RF = xyplot(cv.RF[[1]]$Observed~cv.RF[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed", xlab="predicted (RF)", panel = pfun.line, xlim=lim.zinc, ylim=lim.zinc)
-plt.OK = xyplot(cv.OK[[1]]$Observed~cv.OK[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed", xlab="predicted (geoR)", panel = pfun.line, xlim=lim.zinc, ylim=lim.zinc)
+pfun.loess <- function(x,y, ...){ 
+  panel.xyplot(x,y, ...)
+  panel.abline(0,1,lty=2,lw=1,col="grey60")
+  panel.loess(x,y,span=0.5, col = "grey30", lwd = 1.7)
+}
+plt.RF = xyplot(cv.RF[[1]]$Observed~cv.RF[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed zinc [mg/kg]", xlab="znic predicted by RF [mg/kg]", panel = pfun.loess, xlim=lim.zinc, ylim=lim.zinc)
+plt.OK = xyplot(cv.OK[[1]]$Observed~cv.OK[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed zinc [mg/kg]", xlab="zinc predicted by geoR [mg/kg]", panel = pfun.loess, xlim=lim.zinc, ylim=lim.zinc)
 grid.arrange(plt.OK, plt.RF, ncol=2)
 dev.off()
 
