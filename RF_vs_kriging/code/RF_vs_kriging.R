@@ -129,6 +129,15 @@ cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="r
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
 cv.RF$Summary$RMSE^2/var(meuse$zinc, na.rm = TRUE); cv.RF$Summary$R.squared; cv.RF$Summary$ZSV; cv.RF$Summary$MAE.SE
 cv.OK$Summary$RMSE^2/var(meuse$zinc, na.rm = TRUE); cv.OK$Summary$R.squared; cv.OK$Summary$ZSV; cv.OK$Summary$MAE.SE
+## Plot residuals vgm:
+x = plyr::join_all(list(data.frame(r1=cv.RF$CV_residuals$Observed-cv.RF$CV_residuals$Predicted, id=cv.RF$CV_residuals$SOURCEID), data.frame(r2=cv.OK$CV_residuals$Observed-cv.OK$CV_residuals$Predicted, id=cv.OK$CV_residuals$SOURCEID)))
+x = plyr::join(x, data.frame(id=row.names(meuse@data), zinc=meuse$zinc, x=meuse@coords[,1], y=meuse@coords[,2]))
+plot_vgm(zinc~1, x, meuse.grid, r1="r1", r2="r2", main="Zinc (Meuse)")
+
+## Compare with the standard error of the mean:
+sqrt(var(meuse$zinc)/nrow(meuse))
+
+
 
 ## plot results
 lim.zinc = range(meuse$zinc, na.rm = TRUE)
@@ -190,7 +199,7 @@ points(meuse, pch="+")
 dev.off()
 
 
-## SIC 1997 data set ----
+## ** SIC 1997 data set ---------------------------------------------------
 ## measurements made in Switzerland on the 8th of May 1986
 sic97.sp = readRDS("data/rainfall/sic97.rds")
 swiss1km = readRDS("data/rainfall/swiss1km.rds")
@@ -294,8 +303,6 @@ sd(sic.test$joker-pred.sic2004$predictions$mean)
 ## 104
 
 ## RFsp
-library(tuneRF)
-library(quantregRanger)
 bbox=sic.val@bbox
 bbox[,"min"]=bbox[,"min"]-4000
 bbox[,"max"]=bbox[,"max"]+4000

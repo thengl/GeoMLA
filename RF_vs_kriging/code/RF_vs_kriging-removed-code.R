@@ -106,13 +106,3 @@ points(meuse, pch="+")
 dev.off()
 
 
-# Cross-validation Meuse data set -
-
-## Plot residuals vgm:
-x = plyr::join_all(list(data.frame(r1=cv.RF$CV_residuals$Observed-cv.RF$CV_residuals$Predicted, id=cv.RF$CV_residuals$SOURCEID), data.frame(r2=cv.OK$CV_residuals$Observed-cv.OK$CV_residuals$Predicted, id=cv.OK$CV_residuals$SOURCEID)))
-x = plyr::join(x, data.frame(id=row.names(meuse@data), zinc=meuse$zinc, x=meuse@coords[,1], y=meuse@coords[,2]))
-plot_vgm(zinc~1, x, meuse.grid, r1="r1", r2="r2", main="Zinc (Meuse)")
-
-## Compare with the standard error of the mean:
-sqrt(var(meuse$zinc)/nrow(meuse))
-
