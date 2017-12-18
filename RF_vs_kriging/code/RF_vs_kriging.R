@@ -505,29 +505,38 @@ rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]), all.v
 # set.seed(1)
 # t.prec <- tuneRF(rt.prec, num.trees = 150, build.final.model = FALSE)
 # pars.prec = list(mtry= t.prec$recommended.pars$mtry, min.node.size=t.prec$recommended.pars$min.node.size, sample.fraction=t.prec$recommended.pars$sample.fraction, num.trees=150, importance = "impurity", seed = 1)
-pars.prec = list(mtry= to.come, min.node.size= to.come, sample.fraction=to.come, num.trees=150, seed = 1)
-# m1.prec <- quantregRanger(fmP, rm.prec[sample.int(size = 1e4, n = nrow(rm.prec)),], list(importance = "impurity", num.trees = 150, mtry = 180, seed = 1))
+pars.prec = list(mtry= 212, min.node.size= 2, sample.fraction=0.9553763, num.trees=150, seed = 1)
 m1.prec <- quantregRanger(fmP, rm.prec, pars.prec)
-## mtry needs to be set HIGH --- the higher the better, but this increases computational intensity
-## For mtry < 20 R-square is close to 0!!
-## TAKES 10 minutes on 8-cores Lenovo Legion
-## mtry = 160 takes only 6 minutes
 m1.prec
+# Ranger result
+# 
+# Type:                             Regression 
+# Number of trees:                  150 
+# Sample size:                      157870 
+# Number of independent variables:  229 
+# Mtry:                             212 
+# Target node size:                 2 
+# Variable importance mode:         impurity 
+# OOB prediction error (MSE):       0.005209039 
+# R squared (OOB):                  0.8520446 
+#
+# before tuning, only slighly better:
 # OOB prediction error (MSE):       0.0052395 
 # R squared (OOB):                  0.8511794 
 sd(co_prec$PRCP, na.rm = TRUE)
+# [1] 0.1864649
 xlP.g <- as.list(m1.prec$variable.importance)
 print(t(data.frame(xlP.g[order(unlist(xlP.g), decreasing=TRUE)[1:10]])))
-# cdate      2400.80112
-# doy        1891.66278
-# PRISM_prec   93.48800
-# elev_1km     72.80193
-# layer.89     17.42405
-# layer.221    14.08694
-# layer.27     14.07233
-# layer.139    13.66933
-# layer.219    11.99654
-# layer.96     11.34862
+# cdate      2333.27929
+# doy        1807.15683
+# PRISM_prec   86.28802
+# elev_1km     68.71017
+# layer.89     17.05671
+# layer.221    13.69766
+# layer.139    12.62467
+# layer.27     11.92333
+# layer.35     11.63324
+# layer.219    11.36218
 
 ## Predict some dates (one week):
 T.lst = paste0("2016-02-0", c(1:6))
