@@ -1,21 +1,17 @@
+## Extra examples
+## tom.hengl@gmail.com
 
-# Codes removed from Script RF_vs_kriging.R 
-# by Madlene Nussbaum <madlene.nussbaum@bfh.ch>  
-# Reason: these lines are not directly needed to produce the output for 
-## Hengl et al., "Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables", to be submitted to PeerJ Computer Science
+library(GSIF)
+library(rgdal)
+library(raster)
+library(gstat)
+library(plyr)
+library(randomForest)
+library(plotKML)
+library(scales)
+library(quantregForest)
 
-
-# Preamble 
-
-#library(quantregForest)
-#library(geostatsp)
-
-load(".RData")
-
-
-
-# Meuse ------------------
-
+demo(meuse, echo=FALSE)
 
 ## Compare GLM vs RF --
 m <- glm(zinc~log1p(dist)+ffreq, meuse, family=gaussian(link=log))
@@ -36,36 +32,6 @@ points(meuse, pch="+")
 plot(log1p(raster(meuse.grid["rf.zinc"])), col=leg, zlim=c(4.8,7.4), main="Random Forest")
 points(meuse, pch="+")
 dev.off()
-## TH: Very similar
-
-#plot(variog4(zinc.geo, lambda=0, max.dist=1500, messages=FALSE), lwd=2)
-
-
-# Prediction error
-
-summary(meuse.grid$zinc_rfd_var)
-## Median = 123.6
-## Compare with the prediction error derived using the ranger package:
-m.zinc.r <- ranger(fm0, rm.zinc, keep.inbag = TRUE)
-zinc.rfdR <- predict(m.zinc.r, grid.dist0@data, type="se")
-## Prediction error:
-meuse.grid$zinc_rfdR_var =  sqrt(zinc.rfdR$se^2 + var(m.zinc.r$predictions-meuse$zinc))
-summary(meuse.grid$zinc_rfdR_var)
-## Much higher than what we get with the "quantregRanger"
-
-
-# RF with coordinates only
-
-## Plot
-png(file = "results/meuse/Fig_RF_zinc_coordinates_only.png", res = 150, width = 1750, height = 1200)
-par(mfrow=c(1,2), oma=c(0,0,0,0))
-plot(log1p(raster(meuse.grid["zinc_rfc"])), col=leg, zlim=c(4.8,7.4), main="RF coordinates only", axes=FALSE, box=FALSE, axis.args=axis.ls)
-points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfc_var"]), main="Prediction error", col=rev(bpy.colors()), axes=FALSE, box=FALSE)
-points(meuse, pch="+")
-dev.off()
-
-
 
 ## RF with noise data --
 
@@ -106,39 +72,72 @@ points(meuse, pch="+")
 dev.off()
 
 
-## ** SIC 1997 data set ---------------------------------------------------
 
-#plot(stack(swiss1km[1:2]))
+library(RCurl)
+library(rgdal)
+nl.rd <- getURL("http://spatialreference.org/ref/sr-org/6781/proj4/")
+## Geul data set ----
+geul <- read.table("data/geul/geul.dat", header = TRUE, as.is = TRUE)
+geul$pb = as.numeric(geul$pb)
+geul = geul[!is.na(geul$pb),]
+coordinates(geul) <- ~x+y
+proj4string(geul) <- CRS(nl.rd) 
+grd25 <- readGDAL("data/geul/dem25.txt")
+grd25 <- as(grd25, "SpatialPixelsDataFrame")
+proj4string(grd25) = proj4string(geul) 
 
-#plot(raster(swiss1km["rainfall_UK"]))
-#plot(sqrt(raster(swiss1km["rainfall_UK_var"])))
+## Pb predicted using OK
+library(geoR)
+pb.geo <- as.geodata(geul["pb"])
+pb.vgm <- likfit(pb.geo, lambda=0, messages=FALSE, ini=c(var(log1p(pb.geo$data)),500), cov.model="exponential")
+locs2 = grd25@coords
+pb.ok <- krige.conv(pb.geo, locations=locs2, krige=krige.control(obj.model=pb.vgm))
+grd25$pb_ok = pb.ok$predict
+## Pb predicted using RF only
+ov.geul = over(geul["pb"], grd25)
+summary(ov.geul$band1)
+geul.s = geul[!is.na(ov.geul$band1),"pb"]
+grid.dist1 <- buffer.dist(geul.s, grd25[1], as.factor(1:nrow(geul.s)))
+dn1 <- paste(names(grid.dist1), collapse="+")
+fm1 <- as.formula(paste("pb ~", dn1))
+m1 <- fit.gstatModel(geul.s, fm1, grid.dist1, method="ranger", rvgm=NULL)
+rk.m1 <- predict(m1, grid.dist1)
 
-
-xl1 <- as.list(m1.rain$variable.importance)
-# print(t(data.frame(xl1[order(unlist(xl1), decreasing=TRUE)[1:15]])))
-
-# importance is not in the paper, saw it too late, MN
-pdf(file = "results/rainfall/Fig_Swiss_rainfall_RF_covs_covar-importance.pdf", width=6, height=4.5)
-par(mfrow=c(1,1),oma=c(0.7,2,0,1), mar=c(4,3.5,1,0))
-plot(vv <- t(data.frame(xl1[order(unlist(xl1), decreasing=TRUE)[15:1]])), 1:15, type = "n", ylab = "", yaxt = "n", xlab = "Variable Importance (Node Impurity)")
-abline(h = 1:15, lty = "dotted", col = "grey60")
-points(vv, 1:15)
-axis(2, 1:15, labels = dimnames(vv)[[1]], las = 2)
+## Plot predictions next to each other:
+grd25$pb_ok = ifelse(grd25$pb_ok<expm1(4.2), expm1(4.2), grd25$pb_ok)
+png(file = "results/geul/Fig_comparison_OK_RF_Pb_Geul.png", res = 150, width = 1750, height = 1200)
+par(mfrow=c(1,2), oma=c(0,0,0,0))
+plot(log1p(raster(grd25["pb_ok"])), col=leg, zlim=c(4.2,6.6), main="geoR (krige.conv)")
+points(geul.s, pch="+")
+plot(log1p(raster(rk.m1@predicted[2])), col=leg, zlim=c(4.2,6.6), main="Random Forest")
+points(geul.s, pch="+")
 dev.off()
 
+## RF with both buffer dist and covariates ----
+grd25$swi <- readGDAL("data/geul/swi.sdat")$band1[grd25@grid.index]
+grd25$dis <- readGDAL("data/geul/riverdist.txt")$band1[grd25@grid.index]
+plot(stack(grd25))
+grd25T <- grd25[c("band1","swi","dis")]
+grd25T@data <- cbind(grd25T@data, grid.dist1@data)
+## Run principal component analysis:
+grd25.spc <- spc(grd25T, as.formula(paste("~", paste(names(grd25T), collapse = "+"))))
+plot(stack(grd25.spc@predicted[1:6]))
+fm2 <- as.formula(paste("pb ~", paste(names(grd25.spc@predicted), collapse = "+")))
+m2 <- fit.gstatModel(geul.s, fm2, grd25.spc@predicted, method="quantregForest", rvgm=NULL)
+plot(m2)
+dev.off()
+rk.m2 <- predict(m2, grd25.spc@predicted)
+#plot(rk.m2, col=leg)
+# varImpPlot(m1@regModel)
 
-## ** Ebergotzen binomial variable --------------------------------------
-
-
-
-#par(mfrow=c(1,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
-#plot(raster(eberg_grid["SSE"]), col=rev(bpy.colors()), main="Shannon Scaled Entropy Index", axes=FALSE, box=FALSE)
-#points(eberg[eberg$Parabraunerde=="TRUE"&!is.na(eberg$Parabraunerde)&sel.eberg,], pch=19, cex=.8)
-#points(eberg[eberg$Parabraunerde=="FALSE"&!is.na(eberg$Parabraunerde)&sel.eberg,], pch="+", cex=.8)
-
-
-# This is not in the paper:
-  
+rk.m2@predicted$pb = ifelse(rk.m2@predicted$pb<expm1(4.2), expm1(4.2), rk.m2@predicted$pb)
+png(file = "results/geul/Fig_comparison_RF_covariates_Pb_Geul.png", res = 150, width = 1750, height = 1200)
+par(mfrow=c(1,2), oma=c(0,0,0,0))
+plot(log1p(raster(rk.m2@predicted[2])), col=leg, zlim=c(4.2,6.6), main="Random Forest + covs")
+points(geul.s, pch="+")
+plot(log1p(raster(rk.m1@predicted[2])), col=leg, zlim=c(4.2,6.6), main="Random Forest")
+points(geul.s, pch="+")
+dev.off()
 
 ## ** Intamap example ---------------------------------------------------
 data(sic2004)
@@ -254,31 +253,3 @@ T <- geoCorrection(speed)
 acost <- accCost(T, c(3575290.6,5713305.5))
 plot(acost)
 writeRaster(acost, "/data/tmp/acost.sdat", "SAGA", overwrite=TRUE)
-
-
-## ** Geochemical USA - Multivariate case -----------------------------------
-
-bubble(geochem[!is.na(geochem$PB_ICP40),"PB_ICP40"])
-bubble(geochem[!is.na(geochem$CU_ICP40),"CU_ICP40"])
-bubble(geochem[!is.na(geochem$K_ICP40),"K_ICP40"])
-bubble(geochem[!is.na(geochem$MG_ICP40),"MG_ICP40"])
-
-#writeOGR(geochem, "geochem.shp", "geochem", "ESRI Shapefile")
-
-#str(rm.geochem)
-hist(log1p(rm.geochem$Y))
-summary(as.factor(rm.geochem$TYPE))
-
-
-## ** Spatiotemporal prediction using Random Forest ------------------------
-
-hist(co_prec$cdate)
-hist(co_prec$doy)
-
-plot(raster(co_grids[1]))
-points(co_locs.sp, pch="+")
-
-
-#bubble(co_locs.sp[!is.na(co_locs.sp$x),"x"])
-
-#plot(stack(grid.distP[1:3]))

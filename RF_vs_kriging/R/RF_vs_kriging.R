@@ -30,23 +30,22 @@ library(gdistance)
 
 ## RANGER connected packages (best install from github):
 ## speed up of computing of "se" in ranger https://github.com/imbs-hl/ranger/pull/231
-#devtools::install_github("imbs-hl/ranger")
+#devtools::install_github("imbs-hl/ranger", ref="myquantreg")
 library(ranger)
 #devtools::install_github("PhilippPro/quantregRanger")
-library(quantregRanger)
+#library(quantregRanger)
 ## http://philipppro.github.io/Tuning_random_forest/
 #devtools::install_github("PhilippPro/tuneRF")
 library(tuneRF)
-
-source('code/BGUP_functions.R')
+## Load all functions prepared for this exerice:
+source('R/RFsp_functions.R')
 
 ## General Settings
 ## Legend for plots:
 leg = c("#0000ff", "#0028d7", "#0050af", "#007986", "#00a15e", "#00ca35", "#00f20d", "#1aff00", "#43ff00", "#6bff00", "#94ff00", "#bcff00", "#e5ff00", "#fff200", "#ffca00", "#ffa100", "#ff7900", "#ff5000", "#ff2800", "#ff0000")
-axis.ls = list(at=c(4.8,5.7,6.5,7.4), labels=round(expm1(c(4.8,5.7,6.5,7.4))))
+axis.ls = list(at=c(4.8,5.7,6.5,7.6), labels=round(expm1(c(4.8,5.7,6.5,7.6))))
 ## 1 s.d. quantiles
 quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2)
-
 
 ## ** Example Meuse data set ----------------------------------------------
 demo(meuse, echo=FALSE)
@@ -58,8 +57,8 @@ zinc.vgm <- likfit(zinc.geo, lambda=0, ini=ini.v, cov.model="exponential")
 locs = meuse.grid@coords
 zinc.ok <- krige.conv(zinc.geo, locations=locs, krige=krige.control(obj.model=zinc.vgm))
 meuse.grid$zinc_ok = zinc.ok$predict
-## Prediction error:
-meuse.grid$zinc_ok_var = sqrt(zinc.ok$krige.var)
+## Prediction error 1 s.d.:
+meuse.grid$zinc_ok_range = sqrt(zinc.ok$krige.var)
 
 ## Zinc predicted using RF and buffer distances only ----
 grid.dist0 <- GSIF::buffer.dist(meuse["zinc"], meuse.grid[1], as.factor(1:nrow(meuse)))
@@ -70,6 +69,7 @@ ov.zinc <- over(meuse["zinc"], grid.dist0)
 rm.zinc <- cbind(meuse@data["zinc"], ov.zinc)
 rt.zinc <- makeRegrTask(data = rm.zinc, target = "zinc")
 estimateTimeTuneRF(rt.zinc)
+# Approximated time for tuning: 5M 25S
 # Make reproducible tuning
 set.seed(1)
 t.zinc <- tuneRF(rt.zinc, num.trees = 150, build.final.model = FALSE)
@@ -81,14 +81,15 @@ t.zinc
 # Results: 
 #   mse exec.time
 # 1 60471.79    0.2716
-pars.zinc = list(mtry= t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150, seed = 1)
-m.zinc <- quantregRanger(fm0, rm.zinc, params.ranger = pars.zinc)
+pars.zinc = list(mtry=t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150, seed=1)
+#m.zinc <- quantregRanger(fm0, rm.zinc, params.ranger = pars.zinc)
+m.zinc <- ranger(fm0, rm.zinc, quantreg=TRUE, mtry=t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150, seed=1)
 m.zinc
-zinc.rfd <- predict(m.zinc, grid.dist0@data, quantiles)
+#zinc.rfd <- predict(m.zinc, grid.dist0@data, quantiles)
+zinc.rfd <- predict(m.zinc, grid.dist0@data, type="quantiles", quantiles=quantiles)$predictions
 meuse.grid$zinc_rfd = zinc.rfd[,2]
 ## Prediction error:
-meuse.grid$zinc_rfd_var = (zinc.rfd[,3]-zinc.rfd[,1])/2
-
+meuse.grid$zinc_rfd_range = (zinc.rfd[,3]-zinc.rfd[,1])/2
 
 ## RF and coordinates as covariates only (to be fair, same tuning) ----
 fmc <- zinc ~ x + y
@@ -97,47 +98,45 @@ rt.zinc.coord <- makeRegrTask(data = rm.zinc.coord, target = "zinc")
 set.seed(1)
 t.zinc.coord <- tuneRF(rt.zinc.coord, num.trees = 150, build.final.model = FALSE)
 pars.zinc.coord = list(mtry= t.zinc.coord$recommended.pars$mtry, min.node.size=t.zinc.coord$recommended.pars$min.node.size, sample.fraction=t.zinc.coord$recommended.pars$sample.fraction, num.trees=150, seed = 1)
-m.zinc.coord <- quantregRanger(fmc, rm.zinc.coord, params.ranger = pars.zinc.coord)
+#m.zinc.coord <- quantregRanger(fmc, rm.zinc.coord, params.ranger = pars.zinc.coord)
+m.zinc.coord <- ranger(fmc, rm.zinc.coord, quantreg=TRUE, mtry=t.zinc.coord$recommended.pars$mtry, min.node.size=t.zinc.coord$recommended.pars$min.node.size, sample.fraction=t.zinc.coord$recommended.pars$sample.fraction, num.trees=150, seed=1)
 m.zinc.coord
 ## R-squared still quite high 0.538!
-zinc.rfc <- predict(m.zinc.coord, meuse.grid@coords, quantiles)
+zinc.rfc <- predict(m.zinc.coord, meuse.grid@coords, type="quantiles", quantiles = quantiles)$predictions
 meuse.grid$zinc_rfc = zinc.rfc[,2]
-meuse.grid$zinc_rfc_var = (zinc.rfc[,3]-zinc.rfc[,1])/2
+meuse.grid$zinc_rfc_range = (zinc.rfc[,3]-zinc.rfc[,1])/2
 
 ## Plot predictions UK and RF next to each other:
 pdf(file = "results/meuse/Fig_comparison_OK_RF_zinc_meuse.pdf", width=9.5, height=8)
-var.max = max(c(meuse.grid$zinc_rfd_var, meuse.grid$zinc_ok_var))
-var.min = min(c(meuse.grid$zinc_rfd_var, meuse.grid$zinc_ok_var))
+var.max = max(c(meuse.grid$zinc_rfc_range, meuse.grid$zinc_rfd_range, meuse.grid$zinc_ok_range))
+var.min = min(c(meuse.grid$zinc_rfc_range, meuse.grid$zinc_rfd_range, meuse.grid$zinc_ok_range))
 par(mfrow=c(2,3), oma=c(0,0,0,1), mar=c(0,0,4,3))
-plot(log1p(raster(meuse.grid["zinc_ok"])), col=leg, zlim=c(4.7,7.4), main="Ordinary Kriging (OK)", axes=FALSE, box=FALSE, axis.args=axis.ls)
+plot(log1p(raster(meuse.grid["zinc_ok"])), col=leg, zlim=c(4.7,7.6), main="Ordinary Kriging (OK)", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
-plot(log1p(raster(meuse.grid["zinc_rfd"])), col=leg, zlim=c(4.7,7.4), main="Random Forest (RF), buffers", axes=FALSE, box=FALSE, axis.args=axis.ls)
+plot(log1p(raster(meuse.grid["zinc_rfd"])), col=leg, zlim=c(4.7,7.6), main="Random Forest (RF), buffers", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
-plot(log1p(raster(meuse.grid["zinc_rfc"])), col=leg, zlim=c(4.7,7.4), main="Random Forest (RF), coordinates", axes=FALSE, box=FALSE, axis.args=axis.ls)
+plot(log1p(raster(meuse.grid["zinc_rfc"])), col=leg, zlim=c(4.7,7.6), main="Random Forest (RF), coordinates", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_ok_var"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="OK prediction error", axes=FALSE, box=FALSE)
+plot(raster(meuse.grid["zinc_ok_range"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="OK prediction range", axes=FALSE, box=FALSE)
 points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfd_var"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="RF prediction error, buffers", axes=FALSE, box=FALSE)
+plot(raster(meuse.grid["zinc_rfd_range"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="RF prediction range, buffers", axes=FALSE, box=FALSE)
 points(meuse, pch="+")
-plot(raster(meuse.grid["zinc_rfc_var"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="RF prediction error, coordinates", axes=FALSE, box=FALSE)
+plot(raster(meuse.grid["zinc_rfc_range"]), col=rev(bpy.colors()), zlim=c(var.min,var.max), main="RF prediction range, coordinates", axes=FALSE, box=FALSE)
 points(meuse, pch="+")
 dev.off()
 ## TH: RF creates smoother predictions than OK
 
-## Cross-validation Meuse data set ----
+## Cross-validation Meuse data set geographical covs only ----
 cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="ranger", OK=TRUE, spcT=FALSE, pars.ranger=pars.zinc)
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
-cv.RF$Summary$RMSE^2/var(meuse$zinc, na.rm = TRUE); cv.RF$Summary$R.squared; cv.RF$Summary$ZSV; cv.RF$Summary$MAE.SE
-cv.OK$Summary$RMSE^2/var(meuse$zinc, na.rm = TRUE); cv.OK$Summary$R.squared; cv.OK$Summary$ZSV; cv.OK$Summary$MAE.SE
+cv.RF$Summary
+cv.OK$Summary
+## Compare with the standard error of the mean:
+sqrt(var(meuse$zinc)/nrow(meuse))
 ## Plot residuals vgm:
 x = plyr::join_all(list(data.frame(r1=cv.RF$CV_residuals$Observed-cv.RF$CV_residuals$Predicted, id=cv.RF$CV_residuals$SOURCEID), data.frame(r2=cv.OK$CV_residuals$Observed-cv.OK$CV_residuals$Predicted, id=cv.OK$CV_residuals$SOURCEID)))
 x = plyr::join(x, data.frame(id=row.names(meuse@data), zinc=meuse$zinc, x=meuse@coords[,1], y=meuse@coords[,2]))
 plot_vgm(zinc~1, x, meuse.grid, r1="r1", r2="r2", main="Zinc (Meuse)")
-
-## Compare with the standard error of the mean:
-sqrt(var(meuse$zinc)/nrow(meuse))
-
-
 
 ## plot results
 lim.zinc = range(meuse$zinc, na.rm = TRUE)
@@ -161,19 +160,17 @@ grids.spc = spc(meuse.grid, as.formula("~ SW_occurrence + AHN + ffreq + dist"))
 ## fit hybrid RF model:
 fm1 <- as.formula(paste("zinc ~ ", dn0, " + ", paste(names(grids.spc@predicted), collapse = "+")))
 ov.zinc1 <- over(meuse["zinc"], grids.spc@predicted)
-rm.zinc1 <- cbind(meuse@data["zinc"], ov.zinc, ov.zinc1)
+rm.zinc1 <- do.call(cbind, list(meuse@data["zinc"], ov.zinc, ov.zinc1))
 rt.zinc1 <- makeRegrTask(data = rm.zinc1, target = "zinc")
 set.seed(1)
 t.zinc1 <- tuneRF(rt.zinc1, num.trees = 500, build.final.model = FALSE)
-pars.zinc1 = list(mtry= t.zinc1$recommended.pars$mtry, min.node.size=t.zinc1$recommended.pars$min.node.size, sample.fraction=t.zinc1$recommended.pars$sample.fraction, num.trees=500, importance = "impurity", seed = 1)
-m1.zinc <- quantregRanger(fm1, rm.zinc1, params.ranger = pars.zinc1)
+#pars.zinc1 = list(mtry=t.zinc1$recommended.pars$mtry, min.node.size=t.zinc1$recommended.pars$min.node.size, sample.fraction=t.zinc1$recommended.pars$sample.fraction, num.trees=500, importance = "impurity", seed = 1)
+m1.zinc <- ranger(fm1, rm.zinc1, mtry=t.zinc1$recommended.pars$mtry, min.node.size=t.zinc1$recommended.pars$min.node.size, num.trees=500, importance = "impurity", seed = 1)
 m1.zinc
-zinc.rfd1 <- predict(m1.zinc, cbind(grid.dist0@data, grids.spc@predicted@data), quantiles)
-meuse.grid$zinc_rfd1 = zinc.rfd1[,2]
-meuse.grid$zinc_rfd1_var = (zinc.rfd1[,3]-zinc.rfd1[,1])/2
-xl <- as.list(m1.zinc$variable.importance)
+meuse.grid$zinc_rfd1 = predict(m1.zinc, cbind(grid.dist0@data, grids.spc@predicted@data))$predictions
+xl <- as.list(ranger::importance(m1.zinc))
 
-pdf(file = "results/meuse/Fig_RF_covs_covar-importance.pdf", width=6, height=3.5)
+pdf(file = "results/meuse/Fig_RF_covs_covar-importance.pdf", width=5, height=5.5)
 par(mfrow=c(1,1),oma=c(0.7,2,0,1), mar=c(4,3.5,1,0))
 plot(vv <- t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[10:1]])), 1:10, type = "n", ylab = "", yaxt = "n", xlab = "Variable Importance (Node Impurity)")
 abline(h = 1:10, lty = "dotted", col = "grey60")
@@ -185,16 +182,16 @@ rm.zinc2 <- cbind(meuse@data["zinc"], ov.zinc1)
 rt.zinc2 <- makeRegrTask(data = rm.zinc2, target = "zinc")
 set.seed(1)
 t.zinc2 <- tuneRF(rt.zinc2, num.trees = 150, build.final.model = FALSE)
-pars.zinc2 = list(mtry= t.zinc2$recommended.pars$mtry, min.node.size=t.zinc2$recommended.pars$min.node.size, sample.fraction=t.zinc2$recommended.pars$sample.fraction, num.trees=150, seed = 1)
-m2.zinc <- quantregRanger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = "+")), rm.zinc2, params.ranger = pars.zinc2)
+#pars.zinc2 = list(mtry= t.zinc2$recommended.pars$mtry, min.node.size=t.zinc2$recommended.pars$min.node.size, sample.fraction=t.zinc2$recommended.pars$sample.fraction, num.trees=150, seed = 1)
+m2.zinc <- ranger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = "+")), rm.zinc2, mtry=t.zinc2$recommended.pars$mtry, min.node.size=t.zinc2$recommended.pars$min.node.size, num.trees=150, importance = "impurity", seed = 1)
 m2.zinc
-meuse.grid$zinc_rfd2 = predict(m2.zinc, grids.spc@predicted@data)[,2]
+meuse.grid$zinc_rfd2 = predict(m2.zinc, grids.spc@predicted@data)$predictions
 
 pdf(file = "results/meuse/Fig_RF_covs_bufferdist_zinc_meuse.pdf", width=9, height=5)
 par(mfrow=c(1,2), oma=c(0,0,0,1), mar=c(0,0,4,3))
-plot(log1p(raster(meuse.grid["zinc_rfd2"])), col=leg, zlim=c(4.7,7.4), main="Random Forest (RF) covs only", axes=FALSE, box=FALSE, axis.args=axis.ls)
+plot(log1p(raster(meuse.grid["zinc_rfd2"])), col=leg, zlim=c(4.7,7.6), main="Random Forest (RF) covs only", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
-plot(log1p(raster(meuse.grid["zinc_rfd1"])), col=leg, zlim=c(4.7,7.4), main="Random Forest (RF) covs + buffer dist.", axes=FALSE, box=FALSE, axis.args=axis.ls)
+plot(log1p(raster(meuse.grid["zinc_rfd1"])), col=leg, zlim=c(4.7,7.6), main="Random Forest (RF) covs + buffer dist.", axes=FALSE, box=FALSE, axis.args=axis.ls)
 points(meuse, pch="+")
 dev.off()
 
@@ -217,10 +214,10 @@ locs2 = swiss1km@coords
 KC = krige.control(trend.d = sic.t, trend.l = ~ swiss1km$CHELSA_rainfall + swiss1km$DEM, obj.model = rain.vgm)
 rain.uk <- krige.conv(sic97.geo, locations=locs2, krige=KC)
 swiss1km$rainfall_UK = rain.uk$predict
-swiss1km$rainfall_UK_var = rain.uk$krige.var
+swiss1km$rainfall_UK_range = sd.range(rain.uk$predict, sqrt(rain.uk$krige.var))/2
 
 ## SIC 1997 Random Forest example ----
-swiss.dist0 <- buffer.dist(sic97.sp["rainfall"], swiss1km[1], as.factor(1:nrow(sic97.sp))) ## takes 2-3 mins!
+swiss.dist0 <- GSIF::buffer.dist(sic97.sp["rainfall"], swiss1km[1], as.factor(1:nrow(sic97.sp))) ## takes 2-3 mins!
 ## Deriving buffer distances is computationally very intensive
 ov.swiss = over(sic97.sp["rainfall"], swiss.dist0)
 sw.dn0 <- paste(names(swiss.dist0), collapse="+")
@@ -235,8 +232,9 @@ sw.rm = do.call(cbind, list(sic97.sp@data["rainfall"], ov.rain, ov.swiss))
 # t.rain <- tuneRF(rt.rain, num.trees = 150, build.final.model = FALSE, num.threads = 88)
 # t.rain
 # pars.rain = list(mtry= t.rain$recommended.pars$mtry, min.node.size=t.rain$recommended.pars$min.node.size, sample.fraction=t.rain$recommended.pars$sample.fraction, num.trees=150, importance = "impurity", seed=1)
-pars.rain = list(mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1)
-m1.rain <- quantregRanger(sw.fm1, sw.rm[complete.cases(sw.rm),], params.ranger = pars.rain)
+# pars.rain = list(mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1)
+#m1.rain <- quantregRanger(sw.fm1, sw.rm[complete.cases(sw.rm),], params.ranger = pars.rain)
+m1.rain <- ranger(sw.fm1, sw.rm[complete.cases(sw.rm),], mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1)
 m1.rain
 ## 0.83
 rain.rfd1 <- predict(m1.rain, cbind(swiss.dist0@data, swiss1km@data), quantiles)
@@ -371,17 +369,17 @@ proj4string(carson) = carson1km@proj4string
 rm.carson <- cbind(as.data.frame(carson), over(carson["CLYPPT"], carson1km))
 fm.clay <- as.formula(paste("CLYPPT ~ DEPTH.f + ", paste(names(carson1km), collapse = "+")))
 rm.carson <- rm.carson[complete.cases(rm.carson[,all.vars(fm.clay)]),]
-rm.carson.s <- rm.carson[sample.int(size=1250, nrow(rm.carson)),]
-m.clay <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25, case.weights=1/(rm.carson.s$CLYPPT.sd^2)))
+rm.carson.s <- rm.carson[sample.int(size=2000, nrow(rm.carson)),]
+m.clay <- ranger(fm.clay, rm.carson.s, num.trees=150, mtry=25, case.weights=1/(rm.carson.s$CLYPPT.sd^2), quantreg = TRUE)
 m.clay
 carson1km$DEPTH.f = 30
-clay.rfd <- predict(m.clay, carson1km@data, quantiles)
+clay.rfd <- predict(m.clay, carson1km@data, type="quantiles", quantiles=quantiles)$predictions
 carson1km$clay_rfd = ifelse(clay.rfd[,2]<10, 10, ifelse(clay.rfd[,2]>35, 35, clay.rfd[,2]))
 summary(carson1km$clay_rfd)
 carson1km$clay_rfd_var = (clay.rfd[,3]-clay.rfd[,1])/2
-m.clay0 <- quantregRanger(fm.clay, rm.carson.s, params.ranger = list(num.trees=150, mtry=25, seed = 1))
+m.clay0 <- ranger(fm.clay, rm.carson.s, num.trees=150, mtry=25, seed = 1, quantreg = TRUE)
 m.clay0
-clay0.rfd <- predict(m.clay0, carson1km@data, quantiles)
+clay0.rfd <- predict(m.clay0, carson1km@data, type="quantiles", quantiles=quantiles)$predictions
 carson1km$clay0_rfd = ifelse(clay0.rfd[,2]<10, 10, ifelse(clay0.rfd[,2]>35, 35, clay0.rfd[,2]))
 carson1km$clay0_rfd_var = (clay0.rfd[,3]-clay0.rfd[,1])/2
 
@@ -392,9 +390,9 @@ plot(raster(carson1km["clay_rfd"]), col=leg, main="RF predictions clay (weigthed
 points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
 plot(raster(carson1km["clay0_rfd"]), col=leg, main="RF predictions clay", axes=FALSE, box=FALSE, zlim=c(10,35))
 points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
-plot(raster(carson1km["clay_rfd_var"]), col=rev(bpy.colors()), main="Prediction error (RF weigthed)", axes=FALSE, box=FALSE, zlim=c(0,28))
+plot(raster(carson1km["clay_rfd_var"]), col=rev(bpy.colors()), main="Prediction range (RF weigthed)", axes=FALSE, box=FALSE, zlim=c(0,28))
 points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
-plot(raster(carson1km["clay0_rfd_var"]), col=rev(bpy.colors()), main="Prediction error (RF)", axes=FALSE, box=FALSE, zlim=c(0,28))
+plot(raster(carson1km["clay0_rfd_var"]), col=rev(bpy.colors()), main="Prediction range (RF)", axes=FALSE, box=FALSE, zlim=c(0,28))
 points(rm.carson.s$X, rm.carson.s$Y, pch="+", cex=.8)
 dev.off()
 
@@ -492,12 +490,12 @@ for(i in 1:length(T.lst)){
 ## Geographic distances only:
 grid.distP <- GSIF::buffer.dist(co_locs.sp["STATION"], co_grids[1], as.factor(1:nrow(co_locs.sp)))
 dnP <- paste(names(grid.distP), collapse="+")
-## spacetime hybrid RF model:
+## spacetime 'hybrid' RF model:
 fmP <- as.formula(paste("PRCP ~ cdate + doy + elev_1km + PRISM_prec +", dnP))
 #fmP0 <- as.formula(paste("PRCP ~ cdate + doy + elev_1km + PRISM_prec"))
 ov.prec <- do.call(cbind, list(co_locs.sp@data, over(co_locs.sp, grid.distP), over(co_locs.sp, co_grids[c("elev_1km","PRISM_prec")])))
 rm.prec <- plyr::join(co_prec, ov.prec)
-rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]), all.vars(fmP)]
+rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]),]
 ## 'data.frame':	157870 obs. of 246 variables
 # rt.prec <- makeRegrTask(data = rm.prec, target = "PRCP")
 # estimateTimeTuneRF(rt.prec, num.threads = 88)
@@ -505,11 +503,9 @@ rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]), all.v
 # set.seed(1)
 # t.prec <- tuneRF(rt.prec, num.trees = 150, build.final.model = FALSE)
 # pars.prec = list(mtry= t.prec$recommended.pars$mtry, min.node.size=t.prec$recommended.pars$min.node.size, sample.fraction=t.prec$recommended.pars$sample.fraction, num.trees=150, importance = "impurity", seed = 1)
-pars.prec = list(mtry= 212, min.node.size= 2, sample.fraction=0.9553763, num.trees=150, seed = 1)
-m1.prec <- quantregRanger(fmP, rm.prec, pars.prec)
+pars.prec = list(mtry=212, min.node.size= 2, sample.fraction=0.9553763, num.trees=150, seed=1)
+m1.prec <- ranger(formula = fmP, data = rm.prec, mtry=212, min.node.size= 2, sample.fraction=0.9553763, num.trees=150, seed=1, quantreg=TRUE, importance='impurity')
 m1.prec
-# Ranger result
-# 
 # Type:                             Regression 
 # Number of trees:                  150 
 # Sample size:                      157870 
@@ -519,13 +515,9 @@ m1.prec
 # Variable importance mode:         impurity 
 # OOB prediction error (MSE):       0.005209039 
 # R squared (OOB):                  0.8520446 
-#
-# before tuning, only slighly better:
-# OOB prediction error (MSE):       0.0052395 
-# R squared (OOB):                  0.8511794 
 sd(co_prec$PRCP, na.rm = TRUE)
 # [1] 0.1864649
-xlP.g <- as.list(m1.prec$variable.importance)
+xlP.g <- as.list(ranger::importance(m1.prec))
 print(t(data.frame(xlP.g[order(unlist(xlP.g), decreasing=TRUE)[1:10]])))
 # cdate      2333.27929
 # doy        1807.15683
@@ -545,14 +537,10 @@ for(i in 1:length(T.lst)){
     newdata <- cbind(grid.distP@data, co_grids[c("elev_1km","PRISM_prec")]@data)
     newdata$cdate <- floor(unclass(as.POSIXct(as.POSIXct(T.lst[i], format="%Y-%m-%d")))/86400)
     newdata$doy <- as.integer(strftime(as.POSIXct(T.lst[i], format="%Y-%m-%d"), format = "%j"))
-    prec.rfT1 <- predict(m1.prec, newdata, quantiles, all = FALSE) 
-    ## TH: to speed up use only subset of observations
-    ## TH: takes a lot of RAM (could be further optimized)
+    prec.rfT1 <- predict(m1.prec, newdata, type="quantiles", quantiles=quantiles)$predictions
     co_grids@data[,paste0("PRCP_", T.lst[i])] = ifelse(prec.rfT1[,2]<0, 0, prec.rfT1[,2])*100
     co_grids@data[,paste0("PRCP_", T.lst[i], "_pe")] = (prec.rfT1[,3]-prec.rfT1[,1])/2*100
-    #prec.rfT1 <- predict(m1.prec, newdata)
-    #co_grids@data[,paste0("PRCP_", T.lst[i])] = ifelse(prec.rfT1$predictions<0, 0, prec.rfT1$predictions)
-    #plot(co_grids[paste0("PRCP_", T.lst[i])])
+    #plot(co_grids[paste0("PRCP_", T.lst[i], "_pe")])
     #points(co_locs.sp, pch="+")
     writeGDAL(co_grids[paste0("PRCP_", T.lst[i])], fname=paste0("results/st_prec/co_PRCP_", T.lst[i], ".tif"), options="COMPRESS=DEFLATE", type = "Int16", mvFlag = "-32768")
     writeGDAL(co_grids[paste0("PRCP_", T.lst[i], "_pe")], fname=paste0("results/st_prec/co_PRCP_", T.lst[i], "_pe.tif"), options="COMPRESS=DEFLATE", type = "Int16", mvFlag = "-32768")
