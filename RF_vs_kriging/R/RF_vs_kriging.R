@@ -127,7 +127,8 @@ dev.off()
 ## TH: RF creates smoother predictions than OK
 
 ## Cross-validation Meuse data set geographical covs only ----
-cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="ranger", OK=TRUE, spcT=FALSE, pars.ranger=pars.zinc)
+ss <- seq(0,1,0.01) # define probabilites for coverage plot
+cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="ranger", OK=TRUE, spcT=FALSE, pars.ranger=pars.zinc, predDist = ss)
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
 cv.RF$Summary
 cv.OK$Summary
@@ -150,6 +151,29 @@ pfun.loess <- function(x,y, ...){
 plt.RF = xyplot(cv.RF[[1]]$Observed~cv.RF[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed zinc [mg/kg]", xlab="zinc predicted by RF [mg/kg]", panel = pfun.loess, xlim=lim.zinc, ylim=lim.zinc)
 plt.OK = xyplot(cv.OK[[1]]$Observed~cv.OK[[1]]$Predicted, asp=1, par.settings=list(plot.symbol = list(col=alpha("black", 0.6), fill=alpha("red", 0.6), pch=21, cex=0.9)), scales=list(x=list(log=TRUE, equispaced.log=FALSE), y=list(log=TRUE, equispaced.log=FALSE)), ylab="observed zinc [mg/kg]", xlab="zinc predicted by geoR [mg/kg]", panel = pfun.loess, xlim=lim.zinc, ylim=lim.zinc)
 grid.arrange(plt.OK, plt.RF, ncol=2)
+dev.off()
+
+## Quantile coverage plot -------------
+cvRF.one.side.coverage <- sapply( ss, FUN = function(xx){ 
+  sum( cv.RF$CV_residuals$Observed <= cv.RF$CV_residuals[ grepl(paste0("Pred.Quantile.", xx, "$" ), names(cv.RF$CV_residuals))] ) / nrow( cv.RF$CV_residuals ) } )
+cvOK.one.side.coverage <- sapply( ss, FUN = function(xx){ 
+  sum( cv.OK$CV_residuals$Observed <= cv.OK$CV_residuals$Predicted + cv.OK$CV_residuals$sdPE * qnorm(xx) ) / nrow( cv.RF$CV_residuals ) })
+
+pdf( "results/meuse/Fig_coverage-probabilties_meuse.pdf", width = 9, height = 4.4)
+par( oma = c(0,0,0,0), ps = 10, mar=c(2.7, 2.7, 1, 0.8), mfrow = c(1, 2), mgp = c(1.5, 0.3, 0))
+plot(x = ss, y = cvOK.one.side.coverage, type = "l", pch = 20, ylab = "coverage probabilities OK", xlab="nominal probabilities", asp = 1, xaxt = "n", yaxt = "n", lwd = 1.3)
+abline(0,1, lty = 2, col = "grey60")
+axis( 1, tck = 0.02, las = 1, lwd = 0.95, mgp = c(0.5, 0.1, 0))
+axis( 2, tck = 0.02, las = 1, lwd = 0.95 )
+abline(v = 0.05, lty = "dotted", col = "grey20")
+abline(v = 0.95, lty = "dotted", col = "grey20")
+
+plot(x = ss, y = cvRF.one.side.coverage, type = "l", pch = 20, ylab = "coverage probabilities RFsp", xlab="nominal probabilities", asp = 1, xaxt = "n", yaxt = "n", lwd = 1.3)
+abline(0,1, lty = 2, col = "grey60")
+axis( 1, tck = 0.02, las = 1, lwd = 0.95, mgp = c(0.5, 0.1, 0))
+axis( 2, tck = 0.02, las = 1, lwd = 0.95 )
+abline(v = 0.05, lty = "dotted", col = "grey20")
+abline(v = 0.95, lty = "dotted", col = "grey20")
 dev.off()
 
 ## RF with combined covariates ----
@@ -441,8 +465,8 @@ for(i in t.vars){
   ## fix display options for very skewed variables
   if(any(i %in% c("PB_ICP40","CU_ICP40"))){
     usa5km@data[,paste0(i,"_rf")] = ifelse(x$predictions  < min(geochem@data[,i], na.rm=TRUE), min(geochem@data[,i], na.rm=TRUE), ifelse(x$predictions > quantile(geochem@data[,i], .975, na.rm=TRUE), quantile(geochem@data[,i], .975, na.rm=TRUE), x$predictions)) } else {
-    usa5km@data[,paste0(i,"_rf")] = ifelse(x$predictions  < min(geochem@data[,i], na.rm=TRUE), min(geochem@data[,i], na.rm=TRUE), ifelse(x$predictions > max(geochem@data[,i], na.rm=TRUE), max(geochem@data[,i], na.rm=TRUE), x$predictions)) 
-  }
+      usa5km@data[,paste0(i,"_rf")] = ifelse(x$predictions  < min(geochem@data[,i], na.rm=TRUE), min(geochem@data[,i], na.rm=TRUE), ifelse(x$predictions > max(geochem@data[,i], na.rm=TRUE), max(geochem@data[,i], na.rm=TRUE), x$predictions)) 
+    }
 }
 
 ## Plot predictions next to each other:

@@ -46,7 +46,7 @@ plot_vgm <- function(formulaString, rmatrix, predictionDomain, r1, r2, main){
   points(x=v.r2$dist, y=v.r2$gamma, pch="+", col = "blue", cex=1.4)
 }
 
-cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus=1, Nsub=1e4, OK=FALSE, spcT=TRUE, Log=FALSE, LLO=TRUE, pars.ranger){
+cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus=1, Nsub=1e4, OK=FALSE, spcT=TRUE, Log=FALSE, LLO=TRUE, pars.ranger, predDist=NULL){
   points = points[!is.na(points@data[,varn]),]
   if(missing(idcol)) { 
     points$SOURCEID = row.names(points@data)
@@ -84,14 +84,14 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
     snowfall::sfLibrary(package="GSIF", character.only=TRUE)
     if(method=="ranger"){
       snowfall::sfLibrary(package="ranger", character.only=TRUE)
-      out <- snowfall::sfLapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT, pars.ranger=pars.ranger)})
+      out <- snowfall::sfLapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT, pars.ranger=pars.ranger, predDist=predDist)})
     } else {
       snowfall::sfLibrary(package="geoR", character.only=TRUE)
-      out <- snowfall::sfLapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT, pars.ranger=pars.ranger)})
+      out <- snowfall::sfLapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT, pars.ranger=pars.ranger, predDist=predDist)})
     }
     snowfall::sfStop()
   } else {
-    out <- lapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT, pars.ranger=pars.ranger)})
+    out <- lapply(1:nfold, function(j){predict_parallelP(j, sel=sel, idcol=idcol, varn=varn, points=points, covs=covs, method=method, cpus=cpus, Nsub=Nsub, OK=OK, spcT=spcT, pars.ranger=pars.ranger, predDist=predDist)})
   }
   ## calculate mean accuracy:
   out <- plyr::rbind.fill(out)
@@ -128,7 +128,7 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
   return(cv.r)
 }
 
-predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, Nsub, OK=FALSE, spcT=TRUE, pars.ranger){ 
+predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, Nsub, OK=FALSE, spcT=TRUE, pars.ranger, predDist=NULL){ 
   message(paste0("Running ", j, " iteration..."))
   # For method == "geoR" spcT has no meaning, the same for method == "ranger" & OK = T
   s.train <- points[!sel==j,]
@@ -173,6 +173,11 @@ predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, N
     sel.t = complete.cases(rmatrix.test)
     x.pred <- predict(gm, rmatrix.test[sel.t,], type="quantiles", quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2))$predictions
     pred <- data.frame(predictions=x.pred[,2], se=(x.pred[,3]-x.pred[,1])/2)
+    # compute predictive distribution of quantiles given in parameter predDist
+    if( !is.null(predDist) ){
+      pred.dist <- data.frame( predict(gm, rmatrix.test[sel.t,], type="quantiles", quantiles = predDist )$predictions )
+      names(pred.dist) <- paste0("Pred.Quantile.", predDist)
+    }
   }
   if(method=="geoR"){
     require(geoR)
@@ -202,5 +207,6 @@ predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, N
   obs.pred <- as.data.frame(list(s.test@data[sel.t,varn], pred$predictions, pred$se), col.names=c("Observed", "Predicted", "sdPE"))
   obs.pred[,idcol] <- s.test@data[sel.t,idcol]
   obs.pred$fold = j
+  if( !is.null(predDist) & method=="ranger" ){ obs.pred <- cbind(obs.pred, pred.dist) }
   return(obs.pred)
 }
