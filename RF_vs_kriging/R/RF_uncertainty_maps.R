@@ -96,9 +96,8 @@ r.soil1 = quantile(c(meuse.grid$soil1_rfq_r, meuse.grid$soil1_rfc_r), probs=c(0.
 meuse.grid$soil1_rfq_r = ifelse(meuse.grid$soil1_rfq_r<r.soil1[1], r.soil1[1], ifelse(meuse.grid$soil1_rfq_r>r.soil1[2], r.soil1[2], meuse.grid$soil1_rfq_r))
 meuse.grid$soil1_rfc_r = ifelse(meuse.grid$soil1_rfc_r<r.soil1[1], r.soil1[1], ifelse(meuse.grid$soil1_rfc_r>r.soil1[2], r.soil1[2], meuse.grid$soil1_rfc_r))
 
-# Regression RF
-rf.regr <- ranger(fm.s1, rm.s1, mtry=22, num.trees=500, seed = 1, quantreg=TRUE)
-pred.regr <- predict(rf.regr, cbind(meuse.grid@data, grid.dist0@data), type="response")$predictions
+# Regression prediction
+pred.regr <- predict(m1.s1, cbind(meuse.grid@data, grid.dist0@data), type="response")$predictions
 meuse.grid$soil1_rfr <- pred.regr
 
 pdf(file = "results/meuse/Fig_comparison_uncertainty_Binomial_variables_meuse.pdf", width=7, height=8)
