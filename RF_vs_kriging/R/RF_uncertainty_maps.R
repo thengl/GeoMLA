@@ -96,12 +96,19 @@ r.soil1 = quantile(c(meuse.grid$soil1_rfq_r, meuse.grid$soil1_rfc_r), probs=c(0.
 meuse.grid$soil1_rfq_r = ifelse(meuse.grid$soil1_rfq_r<r.soil1[1], r.soil1[1], ifelse(meuse.grid$soil1_rfq_r>r.soil1[2], r.soil1[2], meuse.grid$soil1_rfq_r))
 meuse.grid$soil1_rfc_r = ifelse(meuse.grid$soil1_rfc_r<r.soil1[1], r.soil1[1], ifelse(meuse.grid$soil1_rfc_r>r.soil1[2], r.soil1[2], meuse.grid$soil1_rfc_r))
 
+# Regression RF
+rf.regr <- ranger(fm.s1, rm.s1, mtry=22, num.trees=500, seed = 1, quantreg=TRUE)
+pred.regr <- predict(rf.regr, cbind(meuse.grid@data, grid.dist0@data), type="response")$predictions
+meuse.grid$soil1_rfr <- pred.regr
+
 pdf(file = "results/meuse/Fig_comparison_uncertainty_Binomial_variables_meuse.pdf", width=7, height=8)
-par(mfrow=c(2,2), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
+par(mfrow=c(2,3), oma=c(0,0,0,0.5), mar=c(0,0,1.5,1))
 par(oma=c(0,0,0,0.5), mar=c(0,0,3.5,1))
 plot(raster(meuse.grid["soil1_rfq"]), col=leg, main="Predictions soil '1' RF quantreg", axes=FALSE, box=FALSE, zlim=c(0,1))
 points(meuse, pch="+")
 plot(raster(meuse.grid["soil1_rfc"]), col=leg, main="Predictions soil '1' RF probs", axes=FALSE, box=FALSE, zlim=c(0,1))
+points(meuse, pch="+")
+plot(raster(meuse.grid["soil1_rfr"]), col=leg, main="Predictions soil '1' RF regr", axes=FALSE, box=FALSE, zlim=c(0,1))
 points(meuse, pch="+")
 plot(raster(meuse.grid["soil1_rfq_r"]), col=rev(bpy.colors())[1:80], main="Prediction error RF quantreg", axes=FALSE, box=FALSE, zlim=r.soil1)
 points(meuse, pch="+")
