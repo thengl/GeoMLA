@@ -29,14 +29,11 @@ library(entropy)
 library(gdistance)
 
 ## RANGER connected packages (best install from github):
-## speed up of computing of "se" in ranger https://github.com/imbs-hl/ranger/pull/231
-#devtools::install_github("imbs-hl/ranger", ref="myquantreg")
+#devtools::install_github("imbs-hl/ranger")
 library(ranger)
-#devtools::install_github("PhilippPro/quantregRanger")
-#library(quantregRanger)
 ## http://philipppro.github.io/Tuning_random_forest/
 #devtools::install_github("PhilippPro/tuneRF")
-library(tuneRF)
+library(tuneRanger)
 ## Load all functions prepared for this exerice:
 source('R/RFsp_functions.R')
 
@@ -68,11 +65,11 @@ ov.zinc <- over(meuse["zinc"], grid.dist0)
 ## Get a good estimate of "mtry" (fine-tuning):
 rm.zinc <- cbind(meuse@data["zinc"], ov.zinc)
 rt.zinc <- makeRegrTask(data = rm.zinc, target = "zinc")
-estimateTimeTuneRF(rt.zinc)
+estimateTimeTuneRanger(rt.zinc)
 # Approximated time for tuning: 5M 25S
 # Make reproducible tuning
 set.seed(1)
-t.zinc <- tuneRF(rt.zinc, num.trees = 150, build.final.model = FALSE)
+t.zinc <- tuneRanger(rt.zinc, num.trees = 150, build.final.model = FALSE)
 t.zinc
 ## With seed = 1. 
 # Recommended parameter settings: 
@@ -96,7 +93,7 @@ fmc <- zinc ~ x + y
 rm.zinc.coord <- cbind(meuse@data["zinc"], meuse@coords)
 rt.zinc.coord <- makeRegrTask(data = rm.zinc.coord, target = "zinc")
 set.seed(1)
-t.zinc.coord <- tuneRF(rt.zinc.coord, num.trees = 150, build.final.model = FALSE)
+t.zinc.coord <- tuneRanger(rt.zinc.coord, num.trees = 150, build.final.model = FALSE)
 pars.zinc.coord = list(mtry= t.zinc.coord$recommended.pars$mtry, min.node.size=t.zinc.coord$recommended.pars$min.node.size, sample.fraction=t.zinc.coord$recommended.pars$sample.fraction, num.trees=150, seed = 1)
 #m.zinc.coord <- quantregRanger(fmc, rm.zinc.coord, params.ranger = pars.zinc.coord)
 m.zinc.coord <- ranger(fmc, rm.zinc.coord, quantreg=TRUE, mtry=t.zinc.coord$recommended.pars$mtry, min.node.size=t.zinc.coord$recommended.pars$min.node.size, sample.fraction=t.zinc.coord$recommended.pars$sample.fraction, num.trees=150, seed=1)
@@ -187,7 +184,7 @@ ov.zinc1 <- over(meuse["zinc"], grids.spc@predicted)
 rm.zinc1 <- do.call(cbind, list(meuse@data["zinc"], ov.zinc, ov.zinc1))
 rt.zinc1 <- makeRegrTask(data = rm.zinc1, target = "zinc")
 set.seed(1)
-t.zinc1 <- tuneRF(rt.zinc1, num.trees = 500, build.final.model = FALSE)
+t.zinc1 <- tuneRanger(rt.zinc1, num.trees = 500, build.final.model = FALSE)
 #pars.zinc1 = list(mtry=t.zinc1$recommended.pars$mtry, min.node.size=t.zinc1$recommended.pars$min.node.size, sample.fraction=t.zinc1$recommended.pars$sample.fraction, num.trees=500, importance = "impurity", seed = 1)
 m1.zinc <- ranger(fm1, rm.zinc1, mtry=t.zinc1$recommended.pars$mtry, min.node.size=t.zinc1$recommended.pars$min.node.size, num.trees=500, importance = "impurity", seed = 1)
 m1.zinc
@@ -205,7 +202,7 @@ dev.off()
 rm.zinc2 <- cbind(meuse@data["zinc"], ov.zinc1)
 rt.zinc2 <- makeRegrTask(data = rm.zinc2, target = "zinc")
 set.seed(1)
-t.zinc2 <- tuneRF(rt.zinc2, num.trees = 150, build.final.model = FALSE)
+t.zinc2 <- tuneRanger(rt.zinc2, num.trees = 150, build.final.model = FALSE)
 #pars.zinc2 = list(mtry= t.zinc2$recommended.pars$mtry, min.node.size=t.zinc2$recommended.pars$min.node.size, sample.fraction=t.zinc2$recommended.pars$sample.fraction, num.trees=150, seed = 1)
 m2.zinc <- ranger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = "+")), rm.zinc2, mtry=t.zinc2$recommended.pars$mtry, min.node.size=t.zinc2$recommended.pars$min.node.size, num.trees=150, importance = "impurity", seed = 1)
 m2.zinc
@@ -250,18 +247,18 @@ ov.rain <- over(sic97.sp["rainfall"], swiss1km[1:2])
 sw.rm = do.call(cbind, list(sic97.sp@data["rainfall"], ov.rain, ov.swiss))
 ## fine-tune RF:
 # rt.rain <- makeRegrTask(data = sw.rm[complete.cases(sw.rm[,all.vars(sw.fm1)]),], target = "rainfall")
-# estimateTimeTuneRF(rt.rain, num.threads=88)
+# estimateTimeTuneRanger(rt.rain, num.threads=88)
 ## Too time-consuming >> do on number cruncher
 # set.seed(1)
-# t.rain <- tuneRF(rt.rain, num.trees = 150, build.final.model = FALSE, num.threads = 88)
+# t.rain <- tuneRanger(rt.rain, num.trees = 150, build.final.model = FALSE, num.threads = 88)
 # t.rain
 # pars.rain = list(mtry= t.rain$recommended.pars$mtry, min.node.size=t.rain$recommended.pars$min.node.size, sample.fraction=t.rain$recommended.pars$sample.fraction, num.trees=150, importance = "impurity", seed=1)
-# pars.rain = list(mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1)
+pars.rain = list(mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1)
 #m1.rain <- quantregRanger(sw.fm1, sw.rm[complete.cases(sw.rm),], params.ranger = pars.rain)
-m1.rain <- ranger(sw.fm1, sw.rm[complete.cases(sw.rm),], mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1)
+m1.rain <- ranger(sw.fm1, sw.rm[complete.cases(sw.rm),], mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1, quantreg=TRUE)
 m1.rain
 ## 0.83
-rain.rfd1 <- predict(m1.rain, cbind(swiss.dist0@data, swiss1km@data), quantiles)
+rain.rfd1 <- predict(m1.rain, cbind(swiss.dist0@data, swiss1km@data), type="quantiles", quantiles = quantiles)$predictions
 swiss1km$rainfall_rfd1 = rain.rfd1[,2]
 swiss1km$rainfall_rfd1_var = (rain.rfd1[,3]-rain.rfd1[,1])/2
 
@@ -275,7 +272,7 @@ plot(raster(swiss1km["rainfall_UK"]), col=leg, main="Universal kriging (UK)", ax
 points(sic97.sp, pch="+")
 plot(raster(swiss1km["rainfall_rfd1"]), col=leg, main="Random Forest (RF)", axes=FALSE, box=FALSE, zlim=c(0, rain.max))
 points(sic97.sp, pch="+")
-plot(sqrt(raster(swiss1km["rainfall_UK_var"])), col=rev(bpy.colors()), main="Universal kriging (UK) prediction error", axes=FALSE, box=FALSE, zlim=c(0,rainv.max))
+plot(sqrt(raster(swiss1km["rainfall_UK_range"])), col=rev(bpy.colors()), main="Universal kriging (UK) prediction error", axes=FALSE, box=FALSE, zlim=c(0,rainv.max))
 points(sic97.sp, pch="+")
 plot(raster(swiss1km["rainfall_rfd1_var"]), col=rev(bpy.colors()), main="Random Forest (RF) prediction error", axes=FALSE, box=FALSE, zlim=c(0,rainv.max))
 points(sic97.sp, pch="+")
@@ -522,10 +519,10 @@ rm.prec <- plyr::join(co_prec, ov.prec)
 rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]),]
 ## 'data.frame':	157870 obs. of 246 variables
 # rt.prec <- makeRegrTask(data = rm.prec, target = "PRCP")
-# estimateTimeTuneRF(rt.prec, num.threads = 88)
+# estimateTimeTuneRanger(rt.prec, num.threads = 88)
 # # Time consuming >> do on number cruncher
 # set.seed(1)
-# t.prec <- tuneRF(rt.prec, num.trees = 150, build.final.model = FALSE)
+# t.prec <- tuneRanger(rt.prec, num.trees = 150, build.final.model = FALSE)
 # pars.prec = list(mtry= t.prec$recommended.pars$mtry, min.node.size=t.prec$recommended.pars$min.node.size, sample.fraction=t.prec$recommended.pars$sample.fraction, num.trees=150, importance = "impurity", seed = 1)
 pars.prec = list(mtry=212, min.node.size= 2, sample.fraction=0.9553763, num.trees=150, seed=1)
 m1.prec <- ranger(formula = fmP, data = rm.prec, mtry=212, min.node.size= 2, sample.fraction=0.9553763, num.trees=150, seed=1, quantreg=TRUE, importance='impurity')
@@ -570,3 +567,4 @@ for(i in 1:length(T.lst)){
     writeGDAL(co_grids[paste0("PRCP_", T.lst[i], "_pe")], fname=paste0("results/st_prec/co_PRCP_", T.lst[i], "_pe.tif"), options="COMPRESS=DEFLATE", type = "Int16", mvFlag = "-32768")
   }
 }
+
