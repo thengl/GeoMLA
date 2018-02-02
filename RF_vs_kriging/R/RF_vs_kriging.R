@@ -37,13 +37,6 @@ library(tuneRanger)
 ## Load all functions prepared for this exerice:
 source('R/RFsp_functions.R')
 
-## General Settings
-## Legend for plots:
-leg = c("#0000ff", "#0028d7", "#0050af", "#007986", "#00a15e", "#00ca35", "#00f20d", "#1aff00", "#43ff00", "#6bff00", "#94ff00", "#bcff00", "#e5ff00", "#fff200", "#ffca00", "#ffa100", "#ff7900", "#ff5000", "#ff2800", "#ff0000")
-axis.ls = list(at=c(4.8,5.7,6.5,7.6), labels=round(expm1(c(4.8,5.7,6.5,7.6))))
-## 1 s.d. quantiles
-quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2)
-
 ## ** Example Meuse data set ----------------------------------------------
 demo(meuse, echo=FALSE)
 
