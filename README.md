@@ -22,7 +22,7 @@ Hengl, T., Nussbaum, M., and Wright, M.N.
 
 ------------------------------------------------------------------------
 
-**Abstract**: This tutorial explains how to use Random Forest to generate spatial and spatiotemporal predictions (i.e. to make maps). Spatial auto-correlation, especially if still existent in the cross-validation residuals, indicates that the predictions are maybe biased, and this is suboptimal. To account for this, we use Random Forest (ranger package) in combination with geographical distances to sampling locations. We describe eight typical situations of interest to spatial prediction applications: (1) prediction of 2D continuous variable without any covariates, (2) prediction of 2D variable with covariates, (3) prediction of binomial variable, (4) prediction of categorical variable, (5) prediction of variables with extreme values, (6) weighted regression, (7) predictions of multivariate problems, and (8) prediction of spatio-temporal variable. Our results indicate that, in most of cases, RFsp produces comparable results to model-based geostatistics, with the differences that it requires much less statistical assumptions and is easier to automate (and scale up through parallelization), on the other hand computational intensity of RF can blow up as the number of training points and covariates increases. RFsp is still an experimental method and application with large data sets (&gt;&gt;200 points) is not recommended. This is a supplementary material prepared for the need of a scientific article: Hengl, T., Nussbaum, M., Wright, M. and Heuvelink, G.B.M., 2018? *"Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables"*, PeerJ (submitted). To download all data sets and more detail code examples please refer to <https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging>
+**Abstract**: This tutorial explains how to use Random Forest to generate spatial and spatiotemporal predictions (i.e. to make maps). Spatial auto-correlation, especially if still existent in the cross-validation residuals, indicates that the predictions are maybe biased, and this is suboptimal. To account for this, we use Random Forest (ranger package) in combination with geographical distances to sampling locations. We describe eight typical situations of interest to spatial prediction applications: (1) prediction of 2D continuous variable without any covariates, (2) prediction of 2D variable with covariates, (3) prediction of binomial variable, (4) prediction of categorical variable, (5) prediction of variables with extreme values, (6) weighted regression, (7) predictions of multivariate problems, and (8) prediction of spatio-temporal variable. These results indicate that RFsp can produce comparable results to model-based geostatistics. The advantage of RFsp over model-based geostatistics is that RFsp requires much less statistical assumptions and is easier to automate (and scale up through parallelization). On the other hand, computational intensity of RFsp can blow up as the number of training points and covariates increases. RFsp is still an experimental method and application with large data sets (&gt;&gt;200 points) is not recommended. This is a supplementary material prepared for the need of a scientific article: Hengl, T., Nussbaum, M., Wright, M. and Heuvelink, G.B.M., 2018? *"Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables"*, PeerJ (submitted). To download all data sets and more detail code examples please refer to <https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging>
 
 Installing and loading packages
 -------------------------------
@@ -172,7 +172,7 @@ zinc.rfd <- predict(m.zinc, grid.dist0@data, type="quantiles", quantiles=quantil
 str(zinc.rfd)
 ```
 
-    ##  num [1:3103, 1:3] 257 257 257 257 257 ...
+    ##  num [1:3103, 1:3] 257 257 257 257 257 257 257 257 269 257 ...
     ##  - attr(*, "dimnames")=List of 2
     ##   ..$ : NULL
     ##   ..$ : chr [1:3] "quantile= 0.159" "quantile= 0.5" "quantile= 0.841"
@@ -553,9 +553,9 @@ str(pred.grids@data)
     ##  $ pred_soil1: num  0.716 0.713 0.713 0.693 0.713 ...
     ##  $ pred_soil2: num  0.246 0.256 0.256 0.27 0.256 ...
     ##  $ pred_soil3: num  0.0374 0.0307 0.0307 0.0374 0.0307 ...
-    ##  $ se_soil1  : num  0.181 0.1695 0.1695 0.0899 0.1695 ...
-    ##  $ se_soil2  : num  0.1448 0.0806 0.0806 0.0793 0.0806 ...
-    ##  $ se_soil3  : num  0.0384 0.0383 0.0383 0.0384 0.0383 ...
+    ##  $ se_soil1  : num  0.1798 0.1685 0.1685 0.0902 0.1685 ...
+    ##  $ se_soil2  : num  0.1451 0.0803 0.0803 0.0788 0.0803 ...
+    ##  $ se_soil3  : num  0.0404 0.0402 0.0402 0.0404 0.0402 ...
 
 where `pred_soil1` is the probability of occurrence of class 1 and `se_soil1` is the standard error of prediction for the `pred_soil1` based on the Jackknife-after-Bootstrap method (Wager et al., 2014). The first column contains existing map of `soil` with hard classes only.
 
@@ -566,7 +566,7 @@ In summary, spatial prediction of binomial and factor-type variables is straight
 Spatial prediction of variables with extreme values
 ---------------------------------------------------
 
-At the Spatial Interpolation Comparison exercise 2004 (G. Dubois, 2005) participants were asked to predict gamma dose rates for Germany at 800 validation points using models fitted with 200 training points. One of the data sets (called 'joker' data set) contained 2 training points with very high values. Modeling such variable with conventional geostatistics is a cumbersome, especially within a fully automated geostatistical interpolation framework such the one implemented in the intamap package (Pebesma et al., 2011):
+At the Spatial Interpolation Comparison exercise 2004 (G. Dubois, 2005) participants were asked to predict gamma dose rates for Germany at 800 validation points using models fitted with 200 training points. One of the data sets (called 'joker' data set) contained 2 training points with very high values. Modeling such variable with conventional geostatistics is a cumbersome, especially within a fully automated geostatistical interpolation framework such the one implemented in the [intamap](https://cran.r-project.org/package=intamap) package (Pebesma et al., 2011):
 
 ``` r
 library(intamap)
@@ -588,7 +588,7 @@ coordinates(sic.test) <- ~x+y
 pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
 ```
 
-    ## R 2018-02-02 17:20:52 interpolating 200 observations, 808 prediction locations
+    ## R 2018-02-04 13:23:37 interpolating 200 observations, 808 prediction locations
 
     ## Warning in predictTime(nObs = dim(observations)[1], nPred = nPred, formulaString = formulaString, : 
     ##  using standard model for estimating time. For better 
@@ -596,7 +596,7 @@ pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
     ##  timeModels <- generateTimeModels()
     ##   and save the workspace
 
-    ## [1] "estimated time for  copula 82.4236621054029"
+    ## [1] "estimated time for  copula 69.7872319511226"
     ## Checking object ... OK
 
     ## Warning in ks.test(data, pnorm, mu, sigma): ties should not be present for
@@ -633,7 +633,7 @@ sd(sic.test$joker-pred.sic2004$predictions$mean)
 
     ## [1] 104.2748
 
-We can test predicting those values using RFsp. First, we need to prepare geographical covariates:
+We can test predicting those values also using RFsp. First, we need to prepare geographical covariates:
 
 ``` r
 bbox=sic.val@bbox
@@ -668,10 +668,10 @@ m1.gamma
     ## Mtry:                             1 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       13044.47 
-    ## R squared (OOB):                  0.1229482
+    ## OOB prediction error (MSE):       12956.3 
+    ## R squared (OOB):                  0.1288763
 
-comparison between these predictions with validation points shows better accuracy than obtained using the `interpolate` function:
+these predictions (when evaluated using the validation points) show better accuracy than obtained using the `interpolate` function:
 
 ``` r
 de2km$gamma_rfd1 = predict(m1.gamma, de.dist0@data)$predictions
@@ -679,9 +679,9 @@ ov.test <- over(sic.test, de2km["gamma_rfd1"])
 sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
 ```
 
-    ## [1] 66.18299
+    ## [1] 66.12989
 
-this number matches also the average score generated by multiple groups at the SIC 2004 (G. Dubois, 2005). So in summary, although the OOB prediction error for the model above is still relatively high, RFsp manages to produce more accurate predictions than the `interpolate` function, probably because it is better in accounting for the local hot-spots. Note also we set `mtry=1` here on purpose low because otherwise importance of the individual 1-2 hotspots drops significantly.
+this number matches also the average score generated by multiple groups at the SIC 2004 (G. Dubois, 2005). So in summary, although the OOB prediction error for the model above is still relatively high, RFsp manages to produce more accurate predictions than the `interpolate` function, probably because it does better job in accounting for the local hot-spots. Note also we set `mtry=1` here on purpose low because otherwise importance of the individual 1–2 hotspots would drop significantly.
 
 ![RFsp predicted gamma radiometrics with two extreme values.](README_files/figure-markdown_github/RF_SIC2004joker-1.png)
 
@@ -706,9 +706,9 @@ str(carson)
     ##  $ SOURCEDB : Factor w/ 2 levels "NASIS","NCSS": 1 1 1 1 1 1 1 1 1 1 ...
     ##  $ DEPTH    : int  NA NA NA NA NA NA NA NA NA NA ...
 
-we focus here on mapping `CLYPPT` i.e. clay content in percent, for which we also would like to use the quality column `CLYPPT.sd` which is the standard deviation of the measurement error. The number of NASIS points is of course much higher (ca. 5x) than number of NCSS points, but NCSS points contain about 3x more accurately estimated clay content.
+we focus here on mapping `CLYPPT` i.e. clay content in percent, for which we also would like to use the quality column `CLYPPT.sd` (the standard deviation of the measurement error). The number of NASIS points is of course much higher (ca. 5x) than number of NCSS points, but NCSS points contain about 3x more accurately estimated clay content.
 
-Next we load covariate layers (49) and prepare a regression matrix:
+Next we load covariate layers (49), overlay points and grids and prepare a regression matrix:
 
 ``` r
 carson$DEPTH.f = ifelse(is.na(carson$DEPTH), 20, carson$DEPTH)
@@ -732,7 +732,7 @@ fm.clay
     ##     T10MOD3_1km + T11MOD3_1km + T12MOD3_1km + TWIMRG5_1km + VBFMRG5_1km + 
     ##     VDPMRG5_1km
 
-Note that, because many soil properties are measured at multiple depth, we fit here a 3D spatial prediction model that also takes `DEPTH` into account. This is rather large data set that we can subset to speed up computing:
+Note that, because many soil properties are measured at multiple depth, we fit here a 3D spatial prediction model that also takes `DEPTH` into account. This is in fact a rather large data set that we can subset to speed up computing:
 
 ``` r
 rm.carson <- rm.carson[complete.cases(rm.carson[,all.vars(fm.clay)]),]
@@ -758,8 +758,8 @@ m.clay
     ## Mtry:                             25 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       191.092 
-    ## R squared (OOB):                  0.21782
+    ## OOB prediction error (MSE):       195.5063 
+    ## R squared (OOB):                  0.2162897
 
 in this case we used inverse measurement variance as `case.weights` so that points that were measured in the lab will receive much higher weights. Final output map below shows that, in this specific case, the model without weights seems to predict somewhat higher values, especially in the extrapolation areas. This indicates that using measurement errors in model calibration is important and one should not avoid specifying this in the model, especially if the training data is heterogeneous.
 
@@ -785,7 +785,7 @@ we focus on mapping four chemical elements at once:
 t.vars = c("PB_ICP40","CU_ICP40","K_ICP40","MG_ICP40")
 ```
 
-in order to model all variables at once, we need to rename them into a single column name `Y`:
+in order to model all variables at once, we need to rename them into a single column name that we call `Y`:
 
 ``` r
 df.lst = lapply(t.vars, function(i){cbind(geochem@data[,c(i,"TYPEDESC")], ov.geochem)})
@@ -794,7 +794,7 @@ for(i in t.vars){colnames(df.lst[[i]])[1] = "Y"}
 for(i in t.vars){df.lst[[i]]$TYPE = i}
 ```
 
-All variables now have now been bind into a single column:
+All variables are now bind into a single column:
 
 ``` r
 rm.geochem = do.call(rbind, df.lst)
@@ -841,11 +841,11 @@ m1.geochem
     ## OOB prediction error (MSE):       1446.878 
     ## R squared (OOB):                  0.4041142
 
-where `TYPECU_ICP40` is the indicator variable specifying that values `Y` refer to `CU_ICP40` i.e. copper contration. This single model can now be used to predict any of the four chemicals in combination with any `TYPEDESC`, which gives the following four maps below.
+where `TYPECU_ICP40` is the indicator variable specifying which values `Y` refer to `CU_ICP40` i.e. copper contration. This single multivariate model can now be used to predict any of the four chemicals in combination with any `TYPEDESC`.
 
 ![figure](./RF_vs_kriging/results/geochem/Fig_NGS_elements_RF.png) *Figure: Predictions produced for four chemical elements (wet stream sediments) from the National Geochemical Survey using a single multivariate RF model. Area covers the US States Illinois and Indiana. Spatial resolution of predictions is 5 km.*
 
-A disadvantage of running multivariate models is that the data size increases rapidly and hence also the computing intensity increases exponentially. For a comparison, the National Geochemical Survey comprises hundreds of chemical elements hence the total size of training points could easily exceed several millions. In addition, further model diagnostics such as variable importance and similar becomes difficult as all variables are included in a single model — indicates overall R-square of 0.40, but not all chemical elements can be mapped with the same accuracy.
+A disadvantage of running multivariate models is that the data size increases rapidly as the number of target variables increases and hence also the computing intensity increases exponentially. For a comparison, the National Geochemical Survey comprises hundreds of chemical elements hence the total size of training points could easily exceed several millions. In addition, further model diagnostics such as variable importance and similar becomes difficult as all variables are included in a single model — indicates overall R-square of 0.40, but not all chemical elements can be mapped with the same accuracy. Note also that in this case study we do not derive any buffer distances (also because the sampling points are well distributed and this data set is rich with covariates) as this would blow up computing load exponentially.
 
 Prediction of spatio-temporal variable
 --------------------------------------
@@ -875,14 +875,14 @@ str(co_prec)
     ##  $ WT06     : int  NA NA NA NA NA NA NA NA NA NA ...
     ##  $ WT11     : int  NA NA NA NA NA NA NA NA NA NA ...
 
-this is a relatively large data set with almost 200,000 observations (which is typical for daily meteo station data). Next we derive cumulative day (`cdate`) and day of the year (`doy`):
+this is a relatively large data set with almost 200,000 observations (such spatiotemporal data sets are typically large). Next we derive cumulative day (`cdate`) and day of the year (`doy`) which we will also use further as covariates to explain daily precipitation:
 
 ``` r
 co_prec$cdate = floor(unclass(as.POSIXct(as.POSIXct(paste(co_prec$DATE), format="%Y-%m-%d")))/86400)
 co_prec$doy = as.integer(strftime(as.POSIXct(paste(co_prec$DATE), format="%Y-%m-%d"), format = "%j"))
 ```
 
-We can extract fixed spatial locations of stations and overaly with covariates such as elevation (`elev_1km`) and long-term precipitation maps (`PRISM_prec`):
+We also extract fixed spatial locations of stations and overaly with covariates such as elevation (`elev_1km`) and long-term precipitation maps (`PRISM_prec`):
 
 ``` r
 co_locs.sp = co_prec[!duplicated(co_prec$STATION),c("STATION","LATITUDE","LONGITUDE")]
@@ -895,14 +895,14 @@ sel.co <- over(co_locs.sp, co_grids[1])
 co_locs.sp <- co_locs.sp[!is.na(sel.co$elev_1km),]
 ```
 
-we derive buffer distances for fixed stations:
+and derive buffer distances for fixed stations:
 
 ``` r
 grid.distP <- GSIF::buffer.dist(co_locs.sp["STATION"], co_grids[1], as.factor(1:nrow(co_locs.sp)))
 dnP <- paste(names(grid.distP), collapse="+")
 ```
 
-so that we can define a hybrid space-time model to predict daily rainfall:
+so that we can define a *hybrid* space-time model that can be used to predict daily rainfall as a function of time, covariates and buffer distances:
 
 ``` r
 fmP <- as.formula(paste("PRCP ~ cdate + doy + elev_1km + PRISM_prec +", dnP))
@@ -972,7 +972,7 @@ Fitting of RFsp follow the same framework as used in all other examples. Based o
 
 Note from the maps above that some hot spots in the prediction error maps from previous days might propagate to other days, which indicates spatiotemporal connection between values. This shows that RFsp connects space and time in a similar way as the model-based geostatistics.
 
-In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;200 point locations (hence &gt;&gt;200 buffer distance maps) is problably not yet recommended.
+In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;200 point locations (hence &gt;&gt;200 buffer distance maps) is problably not yet recommended. For all other details please refer to the paper.
 
 References
 ----------
