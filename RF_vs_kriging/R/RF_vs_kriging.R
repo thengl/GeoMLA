@@ -1,6 +1,6 @@
 ## Comparison RF vs kriging, see slides at: https://github.com/ISRICWorldSoil/GSIF_tutorials/blob/master/geul/5H_Hengl.pdf
 ## By: tom.hengl@gmail.com, contributions by: Madlene Nussbaum <madlene.nussbaum@bfh.ch> and Marvin Wright <marv@wrig.de>
-## Cite as: Hengl et al., "Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables", to be submitted to PeerJ Computer Science
+## Cite as: Hengl et al., "Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables", submitted to PeerJ
 ## Licence: GNU GPL
 
 list.of.packages <- c("plyr", "parallel", "randomForest", "quantregForest", "plotKML", "GSIF", "RCurl", "raster", "rgdal", "geoR", "gstat", "scales", "gdistance", "entropy", "lattice", "gridExtra", "intamap", "maxlike", "spatstat")
@@ -8,7 +8,7 @@ new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"
 if(length(new.packages)) install.packages(new.packages, dependencies = TRUE)
 
 setwd("~/git/GeoMLA/RF_vs_kriging")
-
+load(".RData")
 library(GSIF)
 library(rgdal)
 library(raster)
@@ -35,7 +35,7 @@ library(ranger)
 #devtools::install_github("PhilippPro/tuneRF")
 library(tuneRanger)
 ## Load all functions prepared for this exerice:
-source('R/RFsp_functions.R')
+source('./R/RFsp_functions.R')
 
 ## ** Example Meuse data set ----------------------------------------------
 demo(meuse, echo=FALSE)
@@ -57,28 +57,34 @@ fm0 <- as.formula(paste("zinc ~ ", dn0))
 ov.zinc <- over(meuse["zinc"], grid.dist0)
 ## Get a good estimate of "mtry" (fine-tuning):
 rm.zinc <- cbind(meuse@data["zinc"], ov.zinc)
-rt.zinc <- makeRegrTask(data = rm.zinc, target = "zinc")
-estimateTimeTuneRanger(rt.zinc)
+rt.zinc <- makeRegrTask(data = rm.zinc, target = "zinc", check.data=FALSE)
 # Approximated time for tuning: 5M 25S
 # Make reproducible tuning
 set.seed(1)
-t.zinc <- tuneRanger(rt.zinc, num.trees = 150, build.final.model = FALSE)
+t.zinc <- tuneRanger(rt.zinc, num.trees = 150, build.final.model = FALSE, parameters = list(replace = FALSE))
 t.zinc
 ## With seed = 1. 
 # Recommended parameter settings: 
 #   mtry min.node.size sample.fraction
-# 1   98             4       0.9259533
+# 1   76             4         0.70777
 # Results: 
 #   mse exec.time
-# 1 60471.79    0.2716
+# 1 59042.89    0.1022
 pars.zinc = list(mtry=t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150, seed=1)
-#m.zinc <- quantregRanger(fm0, rm.zinc, params.ranger = pars.zinc)
 m.zinc <- ranger(fm0, rm.zinc, quantreg=TRUE, mtry=t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150, seed=1)
 m.zinc
-#zinc.rfd <- predict(m.zinc, grid.dist0@data, quantiles)
+# R squared (OOB): 0.5126192
+## fit model without QRF
+m.zinc0 <- ranger(fm0, rm.zinc, mtry=t.zinc$recommended.pars$mtry, min.node.size=t.zinc$recommended.pars$min.node.size, sample.fraction=t.zinc$recommended.pars$sample.fraction, num.trees=150, seed=1)
+## predictions
 zinc.rfd <- predict(m.zinc, grid.dist0@data, type="quantiles", quantiles=quantiles)$predictions
 meuse.grid$zinc_rfd = zinc.rfd[,2]
-## Prediction error:
+## This predicts the "median" value; to predict "mean" using ranger without quantreg=TRUE
+meuse.grid$zinc_rfd0 = predict(m.zinc0, grid.dist0@data)$predictions
+summary(meuse.grid$zinc_rfd0); summary(meuse.grid$zinc_rfd) 
+hexbin::hexbinplot(meuse.grid$zinc_rfd0 ~ meuse.grid$zinc_rfd)
+## TH: predictions of the "median" values are somewhat smaller than predictions of the "mean" values,
+## Prediction error s.d.:
 meuse.grid$zinc_rfd_range = (zinc.rfd[,3]-zinc.rfd[,1])/2
 
 ## RF and coordinates as covariates only (to be fair, same tuning) ----
@@ -86,12 +92,11 @@ fmc <- zinc ~ x + y
 rm.zinc.coord <- cbind(meuse@data["zinc"], meuse@coords)
 rt.zinc.coord <- makeRegrTask(data = rm.zinc.coord, target = "zinc")
 set.seed(1)
-t.zinc.coord <- tuneRanger(rt.zinc.coord, num.trees = 150, build.final.model = FALSE)
+t.zinc.coord <- tuneRanger(rt.zinc.coord, num.trees = 150, build.final.model = FALSE, parameters = list(replace = FALSE))
 pars.zinc.coord = list(mtry= t.zinc.coord$recommended.pars$mtry, min.node.size=t.zinc.coord$recommended.pars$min.node.size, sample.fraction=t.zinc.coord$recommended.pars$sample.fraction, num.trees=150, seed = 1)
-#m.zinc.coord <- quantregRanger(fmc, rm.zinc.coord, params.ranger = pars.zinc.coord)
 m.zinc.coord <- ranger(fmc, rm.zinc.coord, quantreg=TRUE, mtry=t.zinc.coord$recommended.pars$mtry, min.node.size=t.zinc.coord$recommended.pars$min.node.size, sample.fraction=t.zinc.coord$recommended.pars$sample.fraction, num.trees=150, seed=1)
 m.zinc.coord
-## R-squared still quite high 0.538!
+## R-squared still quite high 0.517
 zinc.rfc <- predict(m.zinc.coord, meuse.grid@coords, type="quantiles", quantiles = quantiles)$predictions
 meuse.grid$zinc_rfc = zinc.rfc[,2]
 meuse.grid$zinc_rfc_range = (zinc.rfc[,3]-zinc.rfc[,1])/2
@@ -149,16 +154,17 @@ cvRF.one.side.coverage <- sapply( ss, FUN = function(xx){
 cvOK.one.side.coverage <- sapply( ss, FUN = function(xx){ 
   sum( cv.OK$CV_residuals$Observed <= cv.OK$CV_residuals$Predicted + cv.OK$CV_residuals$sdPE * qnorm(xx) ) / nrow( cv.RF$CV_residuals ) })
 
-pdf( "results/meuse/Fig_coverage-probabilties_meuse.pdf", width = 9, height = 4.4)
+pdf("results/meuse/Fig_coverage-probabilties_meuse.pdf", width = 9, height = 4.4)
 par( oma = c(0,0,0,0), ps = 10, mar=c(2.7, 2.7, 1, 0.8), mfrow = c(1, 2), mgp = c(1.5, 0.3, 0))
-plot(x = ss, y = cvOK.one.side.coverage, type = "l", pch = 20, ylab = "coverage probabilities OK", xlab="nominal probabilities", asp = 1, xaxt = "n", yaxt = "n", lwd = 1.3)
+## OK
+plot(x = ss, y = cvOK.one.side.coverage, type = "l", pch = 20, ylab = "coverage probabilities OK", xlab="nominal probabilities", asp = 1, xaxt = "n", yaxt = "n", lwd = 1.3, col="blue")
 abline(0,1, lty = 2, col = "grey60")
 axis( 1, tck = 0.02, las = 1, lwd = 0.95, mgp = c(0.5, 0.1, 0))
 axis( 2, tck = 0.02, las = 1, lwd = 0.95 )
 abline(v = 0.05, lty = "dotted", col = "grey20")
 abline(v = 0.95, lty = "dotted", col = "grey20")
-
-plot(x = ss, y = cvRF.one.side.coverage, type = "l", pch = 20, ylab = "coverage probabilities RFsp", xlab="nominal probabilities", asp = 1, xaxt = "n", yaxt = "n", lwd = 1.3)
+## RF
+plot(x = ss, y = cvRF.one.side.coverage, type = "l", pch = 20, ylab = "coverage probabilities RFsp", xlab="nominal probabilities", asp = 1, xaxt = "n", yaxt = "n", lwd = 1.3, col="red")
 abline(0,1, lty = 2, col = "grey60")
 axis( 1, tck = 0.02, las = 1, lwd = 0.95, mgp = c(0.5, 0.1, 0))
 axis( 2, tck = 0.02, las = 1, lwd = 0.95 )
@@ -170,6 +176,7 @@ dev.off()
 meuse.grid$SW_occurrence = readGDAL("data/meuse/Meuse_GlobalSurfaceWater_occurrence.tif")$band1[meuse.grid@grid.index]
 meuse.grid$AHN = readGDAL("data/meuse/ahn.asc")$band1[meuse.grid@grid.index]
 meuse.grid$LGN5 = as.factor(readGDAL("data/meuse/lgn5.asc")$band1[meuse.grid@grid.index])
+## convert to numeric via PCA
 grids.spc = spc(meuse.grid, as.formula("~ SW_occurrence + AHN + ffreq + dist"))
 ## fit hybrid RF model:
 fm1 <- as.formula(paste("zinc ~ ", dn0, " + ", paste(names(grids.spc@predicted), collapse = "+")))
@@ -177,10 +184,10 @@ ov.zinc1 <- over(meuse["zinc"], grids.spc@predicted)
 rm.zinc1 <- do.call(cbind, list(meuse@data["zinc"], ov.zinc, ov.zinc1))
 rt.zinc1 <- makeRegrTask(data = rm.zinc1, target = "zinc")
 set.seed(1)
-t.zinc1 <- tuneRanger(rt.zinc1, num.trees = 500, build.final.model = FALSE)
-#pars.zinc1 = list(mtry=t.zinc1$recommended.pars$mtry, min.node.size=t.zinc1$recommended.pars$min.node.size, sample.fraction=t.zinc1$recommended.pars$sample.fraction, num.trees=500, importance = "impurity", seed = 1)
-m1.zinc <- ranger(fm1, rm.zinc1, mtry=t.zinc1$recommended.pars$mtry, min.node.size=t.zinc1$recommended.pars$min.node.size, num.trees=500, importance = "impurity", seed = 1)
+t.zinc1 <- tuneRanger(rt.zinc1, num.trees = 500, build.final.model = FALSE, parameters = list(replace = FALSE))
+m1.zinc <- ranger(fm1, rm.zinc1, mtry=t.zinc1$recommended.pars$mtry, min.node.size=t.zinc1$recommended.pars$min.node.size, num.trees=500, importance = "impurity", seed=1)
 m1.zinc
+## R squared (OOB): 0.6412438
 meuse.grid$zinc_rfd1 = predict(m1.zinc, cbind(grid.dist0@data, grids.spc@predicted@data))$predictions
 xl <- as.list(ranger::importance(m1.zinc))
 
@@ -192,13 +199,14 @@ points(vv, 1:10)
 axis(2, 1:10, labels = dimnames(vv)[[1]], las = 2)
 dev.off()
 
+## RF without geographical coordinates
 rm.zinc2 <- cbind(meuse@data["zinc"], ov.zinc1)
 rt.zinc2 <- makeRegrTask(data = rm.zinc2, target = "zinc")
 set.seed(1)
-t.zinc2 <- tuneRanger(rt.zinc2, num.trees = 150, build.final.model = FALSE)
-#pars.zinc2 = list(mtry= t.zinc2$recommended.pars$mtry, min.node.size=t.zinc2$recommended.pars$min.node.size, sample.fraction=t.zinc2$recommended.pars$sample.fraction, num.trees=150, seed = 1)
-m2.zinc <- ranger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = "+")), rm.zinc2, mtry=t.zinc2$recommended.pars$mtry, min.node.size=t.zinc2$recommended.pars$min.node.size, num.trees=150, importance = "impurity", seed = 1)
+t.zinc2 <- tuneRanger(rt.zinc2, num.trees = 150, build.final.model = FALSE, parameters = list(replace = FALSE))
+m2.zinc <- ranger(paste("zinc ~ ", paste(names(grids.spc@predicted), collapse = "+")), rm.zinc2, mtry=t.zinc2$recommended.pars$mtry, min.node.size=t.zinc2$recommended.pars$min.node.size, num.trees=150, importance = "impurity", seed=1)
 m2.zinc
+## R squared (OOB): 0.5751939
 meuse.grid$zinc_rfd2 = predict(m2.zinc, grids.spc@predicted@data)$predictions
 
 pdf(file = "results/meuse/Fig_RF_covs_bufferdist_zinc_meuse.pdf", width=9, height=5)
@@ -228,7 +236,8 @@ locs2 = swiss1km@coords
 KC = krige.control(trend.d = sic.t, trend.l = ~ swiss1km$CHELSA_rainfall + swiss1km$DEM, obj.model = rain.vgm)
 rain.uk <- krige.conv(sic97.geo, locations=locs2, krige=KC)
 swiss1km$rainfall_UK = rain.uk$predict
-swiss1km$rainfall_UK_range = sd.range(rain.uk$predict, sqrt(rain.uk$krige.var))/2
+#swiss1km$rainfall_UK_range = sd.range(rain.uk$predict, sqrt(rain.uk$krige.var))/2
+swiss1km$rainfall_UK_range = sqrt(rain.uk$krige.var)
 
 ## SIC 1997 Random Forest example ----
 swiss.dist0 <- GSIF::buffer.dist(sic97.sp["rainfall"], swiss1km[1], as.factor(1:nrow(sic97.sp))) ## takes 2-3 mins!
@@ -243,15 +252,15 @@ sw.rm = do.call(cbind, list(sic97.sp@data["rainfall"], ov.rain, ov.swiss))
 # estimateTimeTuneRanger(rt.rain, num.threads=88)
 ## Too time-consuming >> do on number cruncher
 # set.seed(1)
-# t.rain <- tuneRanger(rt.rain, num.trees = 150, build.final.model = FALSE, num.threads = 88)
+# t.rain <- tuneRanger(rt.rain, num.trees = 150, build.final.model = FALSE, num.threads = 88, parameters = list(replace = FALSE))
 # t.rain
 # pars.rain = list(mtry= t.rain$recommended.pars$mtry, min.node.size=t.rain$recommended.pars$min.node.size, sample.fraction=t.rain$recommended.pars$sample.fraction, num.trees=150, importance = "impurity", seed=1)
 pars.rain = list(mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1)
-#m1.rain <- quantregRanger(sw.fm1, sw.rm[complete.cases(sw.rm),], params.ranger = pars.rain)
 m1.rain <- ranger(sw.fm1, sw.rm[complete.cases(sw.rm),], mtry=27, min.node.size=2, sample.fraction=0.9930754, num.trees=150, importance = "impurity", seed=1, quantreg=TRUE)
 m1.rain
-## 0.83
+## R squared (OOB): 0.8311812
 rain.rfd1 <- predict(m1.rain, cbind(swiss.dist0@data, swiss1km@data), type="quantiles", quantiles = quantiles)$predictions
+## now more computational...
 swiss1km$rainfall_rfd1 = rain.rfd1[,2]
 swiss1km$rainfall_rfd1_var = (rain.rfd1[,3]-rain.rfd1[,1])/2
 

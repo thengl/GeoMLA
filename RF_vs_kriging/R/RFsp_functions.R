@@ -175,11 +175,15 @@ predict_parallelP <- function(j, sel, idcol, varn, points, covs, method, cpus, N
     } else {
       pars.ranger$mtry = ifelse(pars.ranger$mtry >= length(all.vars(fm0)), length(all.vars(fm0))-1, pars.ranger$mtry)
       ##  mtry can not be larger than number of variables in data
-      gm <- ranger(fm0, rmatrix[complete.cases(rmatrix),], mtry=pars.ranger$mtry, min.node.size=pars.ranger$min.node.size, num.trees = pars.ranger$num.trees, sample.fraction=pars.ranger$sample.fraction, seed=pars.ranger$seed, quantreg = TRUE)
+      rmatrix0 = rmatrix[complete.cases(rmatrix),]
+      gm <- ranger(fm0, rmatrix0, mtry=pars.ranger$mtry, min.node.size=pars.ranger$min.node.size, num.trees = pars.ranger$num.trees, sample.fraction=pars.ranger$sample.fraction, seed=pars.ranger$seed, quantreg = TRUE)
+      gm0 <- ranger(fm0, rmatrix0, mtry=pars.ranger$mtry, min.node.size=pars.ranger$min.node.size, num.trees = pars.ranger$num.trees, sample.fraction=pars.ranger$sample.fraction, seed=pars.ranger$seed)
+      ## model to predict mean values
     }
     sel.t = complete.cases(rmatrix.test)
-    x.pred <- predict(gm, rmatrix.test[sel.t,], type="quantiles", quantiles = c((1-.682)/2, 0.5, 1-(1-.682)/2))$predictions
-    pred <- data.frame(predictions=x.pred[,2], se=(x.pred[,3]-x.pred[,1])/2)
+    ## predict s.d. of the prediction error
+    x.pred <- predict(gm, rmatrix.test[sel.t,], type="quantiles", quantiles = c((1-.682)/2, 1-(1-.682)/2))$predictions
+    pred <- data.frame(predictions=predict(gm0, rmatrix.test[sel.t,])$predictions, se=(x.pred[,2]-x.pred[,1])/2)
     # compute predictive distribution of quantiles given in parameter predDist
     if( !is.null(predDist) ){
       pred.dist <- data.frame( predict(gm, rmatrix.test[sel.t,], type="quantiles", quantiles = predDist )$predictions )

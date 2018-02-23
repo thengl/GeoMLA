@@ -13,8 +13,8 @@ Hengl, T., Nussbaum, M., and Wright, M.N.
 -   [Prediction of spatio-temporal variable](#prediction-of-spatio-temporal-variable)
 -   [References](#references)
 
-| <a href="https://github.com/thengl"><img src="https://avatars0.githubusercontent.com/u/640722?s=460&v=4" height="100" alt="Tomislav Hengl"></a> | <a href="https://github.com/mnocci"><img src="https://www.hafl.bfh.ch/uploads/pics/Nussbaum_Madlene.jpg" height="100" alt="Madlene Nussbaum"></a> | <a href="https://github.com/mnwright"><img src="https://avatars3.githubusercontent.com/u/9598192?s=460&v=4" height="100" alt="Marvin N. Wright"></a> |
-|-------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| <a href="https://github.com/thengl"><img src="https://avatars0.githubusercontent.com/u/640722?s=460&v=4" height="100" alt="Tomislav Hengl"></a> | <a href="https://github.com/mnocci"><img src="./README_files/madlene.jpg" height="100" alt="Madlene Nussbaum"></a> | <a href="https://github.com/mnwright"><img src="https://avatars3.githubusercontent.com/u/9598192?s=460&v=4" height="100" alt="Marvin N. Wright"></a> |
+|-------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
 
 ------------------------------------------------------------------------
 
@@ -22,7 +22,7 @@ Hengl, T., Nussbaum, M., and Wright, M.N.
 
 ------------------------------------------------------------------------
 
-**Abstract**: This tutorial explains how to use Random Forest to generate spatial and spatiotemporal predictions (i.e. to make maps). Spatial auto-correlation, especially if still existent in the cross-validation residuals, indicates that the predictions are maybe biased, and this is suboptimal. To account for this, we use Random Forest (ranger package) in combination with geographical distances to sampling locations. We describe eight typical situations of interest to spatial prediction applications: (1) prediction of 2D continuous variable without any covariates, (2) prediction of 2D variable with covariates, (3) prediction of binomial variable, (4) prediction of categorical variable, (5) prediction of variables with extreme values, (6) weighted regression, (7) predictions of multivariate problems, and (8) prediction of spatio-temporal variable. These results indicate that RFsp can produce comparable results to model-based geostatistics. The advantage of RFsp over model-based geostatistics is that RFsp requires much less statistical assumptions and is easier to automate (and scale up through parallelization). On the other hand, computational intensity of RFsp can blow up as the number of training points and covariates increases. RFsp is still an experimental method and application with large data sets (&gt;&gt;200 points) is not recommended. This is a supplementary material prepared for the need of a scientific article: Hengl, T., Nussbaum, M., Wright, M. and Heuvelink, G.B.M., 2018? *"Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables"*, PeerJ (submitted). To download all data sets and more detail code examples please refer to <https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging>
+**Abstract**: This tutorial explains how to use Random Forest to generate spatial and spatiotemporal predictions (i.e. to make maps using Random Forest). Spatial auto-correlation, especially if still existent in the cross-validation residuals, indicates that the predictions are maybe biased, and this is suboptimal. To account for this, we use Random Forest (as implemented in the ranger package) in combination with geographical distances to sampling locations to fit models and predict values. We describe eight typical situations of interest to spatial prediction applications: (1) prediction of 2D continuous variable without any covariates, (2) prediction of 2D variable with covariates, (3) prediction of binomial variable, (4) prediction of categorical variable, (5) prediction of variables with extreme values, (6) weighted regression, (7) predictions of multivariate problems, and (8) prediction of spatio-temporal variable. Our results indicate that RFsp can produce comparable results to model-based geostatistics. The advantage of RFsp over model-based geostatistics is that RFsp requires much less statistical assumptions and is easier to automate (and scale up through parallelization). On the other hand, computational intensity of RFsp can blow up as the number of training points and covariates increases. RFsp is still an experimental method and application with large data sets (&gt;&gt;200 points) is not recommended. This is a supplementary material prepared for the need of a scientific article: Hengl, T., Nussbaum, M., Wright, M. and Heuvelink, G.B.M., 2018? *"Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables"*, PeerJ (submitted). To download all data sets and more detail code examples please refer to <https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging>
 
 Installing and loading packages
 -------------------------------
@@ -33,7 +33,7 @@ To run this tutorial it is probably best idea to install [ranger](https://github
 devtools::install_github("imbs-hl/ranger")
 ```
 
-Quantile regression random forest and derivation of standard errors using Jackknifing is only available from version &gt;0.9.4. Other packages that we use here include:
+Quantile regression random forest and derivation of standard errors using Jackknifing is available from ranger version &gt;0.9.4. Other packages that we use here include:
 
 ``` r
 library(GSIF)
@@ -51,7 +51,7 @@ library(rgdal)
 
     ## rgdal: version: 1.2-8, (SVN revision 663)
     ##  Geospatial Data Abstraction Library extensions to R successfully loaded
-    ##  Loaded GDAL runtime: GDAL 2.2.1, released 2017/06/23
+    ##  Loaded GDAL runtime: GDAL 2.2.2, released 2017/09/15
     ##  Path to GDAL shared files: /usr/share/gdal/2.2
     ##  Loaded PROJ.4 runtime: Rel. 4.9.2, 08 September 2015, [PJ_VERSION: 492]
     ##  Path to PROJ.4 shared files: (autodetected)
@@ -78,7 +78,7 @@ library(ranger)
 
     FALSE Loading required package: bitops
 
-We also load a number of local function prepare only for the purpose of this tutorial:
+We also load a number of local function prepared for the purpose of this tutorial:
 
 ``` r
 source('./RF_vs_kriging/R/RFsp_functions.R')
@@ -87,7 +87,7 @@ source('./RF_vs_kriging/R/RFsp_functions.R')
 Spatial prediction 2D continuous variable using buffer distances
 ----------------------------------------------------------------
 
-To predict continuous variable (without using any extra covariates) using RFsp, if no other information is available, we can use buffer distances to all points as covariates. These can be derived with the help of the [raster](https://cran.r-project.org/package=raster) package (Hijmans & Etten, 2017). Consider for example the meuse data set from the [gstat](https://github.com/edzer/gstat) package:
+If no other information is available, we can use buffer distances to all points as covariates to predict values of some continuous or categorical variable in the RFsp framework. These can be derived with the help of the [raster](https://cran.r-project.org/package=raster) package (Hijmans & Etten, 2017). Consider for example the meuse data set from the [gstat](https://github.com/edzer/gstat) package:
 
 ``` r
 demo(meuse, echo=FALSE)
@@ -143,7 +143,7 @@ ov.zinc <- over(meuse["zinc"], grid.dist0)
 rm.zinc <- cbind(meuse@data["zinc"], ov.zinc)
 ```
 
-to estimate also the prediction error variance i.e. prediction intervals we set `quantreg=TRUE` (Meinshausen, 2006):
+to estimate also the prediction error variance i.e. prediction intervals we set `quantreg=TRUE` which initiates the Quantile Regression RF approach (Meinshausen, 2006):
 
 ``` r
 m.zinc <- ranger(fm0, rm.zinc, quantreg=TRUE, num.trees=150, seed=1)
@@ -172,19 +172,21 @@ zinc.rfd <- predict(m.zinc, grid.dist0@data, type="quantiles", quantiles=quantil
 str(zinc.rfd)
 ```
 
-    ##  num [1:3103, 1:3] 257 257 257 257 257 257 257 257 269 257 ...
+    ##  num [1:3103, 1:3] 257 257 257 257 257 ...
     ##  - attr(*, "dimnames")=List of 2
     ##   ..$ : NULL
     ##   ..$ : chr [1:3] "quantile= 0.159" "quantile= 0.5" "quantile= 0.841"
 
-this will estimate 67% probability lower and upper limits and median value. To be able to plot or export these values as maps, we them to the spatial pixels object:
+this will estimate 67% probability lower and upper limits and median value. Note that "median" can often be different from the "mean", so if you prefer to derive mean, then the `quantreg=FALSE` needs to be used.
+
+To be able to plot or export predicted values as maps, we add them to the spatial pixels object:
 
 ``` r
 meuse.grid$zinc_rfd = zinc.rfd[,2]
 meuse.grid$zinc_rfd_range = (zinc.rfd[,3]-zinc.rfd[,1])/2
 ```
 
-Compare this with the model-based geostatistics (see e.g. [geoR package](http://leg.ufpr.br/geoR/geoRdoc/geoRintro.html)), where we first fit variogram of the target variable (Brown, 2015; Diggle & Ribeiro Jr, 2007):
+We can compare the RFsp approach with the model-based geostatistics (see e.g. [geoR package](http://leg.ufpr.br/geoR/geoRdoc/geoRintro.html)), where we first decide about the transformation, then fit variogram of the target variable (Brown, 2015; Diggle & Ribeiro Jr, 2007):
 
 ``` r
 zinc.geo <- as.geodata(meuse["zinc"])
@@ -232,20 +234,21 @@ meuse.grid$zinc_ok = zinc.ok$predict
 meuse.grid$zinc_ok_range = sqrt(zinc.ok$krige.var)
 ```
 
-which shows that geoR automatically back-transforms values to the original scale. Comparison of predictions and prediction error maps produced using geoR (ordinary kriging) and RFsp (with buffer distances and by just using coordinates) is given below.
+in this case geoR automatically back-transforms values to the original scale, which is a recommended feature. Comparison of predictions and prediction error maps produced using geoR (ordinary kriging) and RFsp (with buffer distances and by just using coordinates) is given below.
 
 ![figure](./RF_vs_kriging/results/meuse/Fig_comparison_OK_RF_zinc_meuse.png) *Figure: Comparison of predictions based on ordinary kriging as implemented in the geoR package (left) and random forest (right) for Zinc concentrations, Meuse data set: (first row) predicted concentrations in log-scale and (second row) standard deviation of the prediction errors for OK and RF methods.*
 
-In principle, RFsp gives very similar results as ordinary kriging via geoR. The differences are:
+From the plot above, it can be concluded that RFsp gives very similar results as ordinary kriging via geoR. The differences between geoR and RFsp, however, are:
 
 -   RF requires no transformation i.e. works equally good with skewed and normally distributed variables; in general RF, has much less statistical assumptions than model-based geostatistics,
--   RF prediction error variance in average shows somewhat stronger contrast than OK variance map,
+-   RF prediction error variance in average shows somewhat stronger contrast than OK variance map i.e. it emphasizes isolated less probable local points much more than geoR,
 -   RFsp is significantly more computational as distances need to be derived from any sampling point to all new predictions locations,
+-   geoR uses global model parameters and as such also prediction patterns are relatively uniform, RFsp on the other hand (being a tree-based) will produce patterns that as much as possible match data,
 
 Spatial prediction 2D variable with covariates
 ----------------------------------------------
 
-Next we can also consider adding extra covariates that describe soil forming processes or characteristics of the land of interest, for example the surface water occurrence (Pekel, Cottam, Gorelick, & Belward, 2016) and elevation ([AHN](http://ahn.nl)):
+Next we can also consider adding extra covariates that describe soil forming processes or characteristics of the land of interest to the list of buffer distances, for example the surface water occurrence (Pekel, Cottam, Gorelick, & Belward, 2016) and elevation ([AHN](http://ahn.nl)):
 
 ``` r
 meuse.grid$SW_occurrence = readGDAL("./RF_vs_kriging/data/meuse/Meuse_GlobalSurfaceWater_occurrence.tif")$band1[meuse.grid@grid.index]
@@ -261,10 +264,10 @@ meuse.grid$AHN = readGDAL("./RF_vs_kriging/data/meuse/ahn.asc")$band1[meuse.grid
     ## ./RF_vs_kriging/data/meuse/ahn.asc has GDAL driver AAIGrid 
     ## and has 104 rows and 78 columns
 
-to convert all covariates to numeric values and impute all missing pixels we use:
+to convert all covariates to numeric values and impute all missing pixels we use Principal Component transformation:
 
 ``` r
-grids.spc = spc(meuse.grid, as.formula("~ SW_occurrence + AHN + ffreq + dist"))
+grids.spc = GSIF::spc(meuse.grid, as.formula("~ SW_occurrence + AHN + ffreq + dist"))
 ```
 
     ## Converting ffreq to indicators...
@@ -390,14 +393,14 @@ zinc.uk <- krige.conv(zinc.geo, locations=locs, krige=KC)
 meuse.grid$zinc_UK = zinc.uk$predict
 ```
 
-again, overall predictions looks fairly similar. The difference between using geoR and RFsp is that, in the case of RFsp there are less choices and less assumptions to be made. Also, RFsp allows that relationship with covariates and geographical distances is fitted all at once.
+again, overall predictions looks fairly similar. The difference between using geoR and RFsp is that, in the case of RFsp there are less choices and less assumptions to be made. Also, RFsp allows that relationship with covariates and geographical distances is fitted all at once. This makes RFsp in general less cumbersome than model-based geostatistics, but then more of a "black-box" system to a geostatistician.
 
-![figure](./RF_vs_kriging/results/meuse/Fig_RF_covs_bufferdist_zinc_meuse.png) *Figure: Comparison of predictions produced using random forest and covariates only (left), and random forest with combined covariates and buffer distances (right).*
+![figure](./RF_vs_kriging/results/meuse/Fig_RF_covs_bufferdist_zinc_meuse.png) *Figure: Comparison of predictions (median values) produced using random forest and covariates only (left), and random forest with combined covariates and buffer distances (right).*
 
 Spatial prediction of binomial variable
 ---------------------------------------
 
-RFsp can also be used to predict i.e. map distribution of binomial variables i.e. having only two states (TRUE or FALSE). Consider for example the soil type 1 from the meuse data set:
+RFsp can also be used to predict i.e. map distribution of binomial variables i.e. having only two states (TRUE or FALSE). In the model-based geostatistics equivalent methods are indicator kriging and similar. Consider for example the soil type 1 from the meuse data set:
 
 ``` r
 meuse@data = cbind(meuse@data, data.frame(model.matrix(~soil-1, meuse@data)))
@@ -409,8 +412,8 @@ summary(as.factor(meuse$soil1))
 
 in this case class `soil1` is the dominant soil type in the area. To produce a map of `soil1` using RFsp we have now two options:
 
--   *Option 1*: treat binomial variable as numeric variable with 0 / 1 values (thus regression problem),
--   *Option 2*: treat binomial variable as factor variable with a single class (thus classification problem),
+-   *Option 1*: treat binomial variable as numeric variable with 0 / 1 values (thus a regression problem),
+-   *Option 2*: treat binomial variable as factor variable with a single class (thus a classification problem),
 
 In the case of Option 1, we model `soil1` as:
 
@@ -461,7 +464,7 @@ m2.s1
     ## Variable importance mode:         none 
     ## OOB prediction error:             0.05860483
 
-which shows that the Out of Bag prediction error (classification error) is only 6%, or in other words classification accuracy is 94%. Note that, it is not easy to compare the results of the regression and classification OOB errors as these are conceptually different. Also note that we turn on `keep.inbag = TRUE` so that ranger can estimate the classification errors using the Jackknife-after-Bootstrap method (Wager, Hastie, & Efron, 2014). `quantreg=TRUE` obviously would not work here since it is a classification problem.
+which shows that the Out of Bag prediction error (classification error) is only 6%, or in other words classification accuracy is 94%. Note that, it is not easy to compare the results of the regression and classification OOB errors as these are conceptually different. Also note that we turn on `keep.inbag = TRUE` so that ranger can estimate the classification errors using the Jackknife-after-Bootstrap method (Wager, Hastie, & Efron, 2014). `quantreg=TRUE` obviously would not work here since it is a classification and not a regression problem.
 
 To produce predictions using the two options we use:
 
@@ -470,16 +473,16 @@ pred.regr <- predict(m1.s1, cbind(meuse.grid@data, grid.dist0@data), type="respo
 pred.clas <- predict(m2.s1, cbind(meuse.grid@data, grid.dist0@data), type="se")
 ```
 
-in principle, these two options to predicting distribution of binomial variable are mathematically equivalent and should lead to same predictions (also shown in the map below). In practice there can be some smaller differences in numbers due to rounding effect or random start effects.
+in principle, the two options to predicting distribution of binomial variable are mathematically equivalent and should lead to same predictions (also shown in the map below). In practice there can be some smaller differences in numbers due to rounding effect or random start effects.
 
 ![figure](./RF_vs_kriging/results/meuse/Fig_comparison_uncertainty_Binomial_variables_meuse.png) *Figure: Comparison of predictions for soil class "1" produced using (left) regression and prediction of the median value, (middle) regression and prediction of response value, and (right) classification with probabilities.*
 
-In summary, predicting binomial variables using RFsp can be implemented both as a classification and regression problems. These are in fact mathematically equivalent and should lead to same predictions.
+In summary, predicting binomial variables using RFsp can be implemented both as a classification and regression problems and both are possible via the ranger package and should lead to same results.
 
 Spatial prediction of categorical variable
 ------------------------------------------
 
-Prediction of categorical variable using ranger clearly belongs to classification problem. Now the target variable contains multiple states (3 in this case). Model follow still the same formulation:
+Spatial prediction of categorical variable using ranger belongs to classification problems. The target variable contains multiple states (3 in this case), but the model follows still the same formulation:
 
 ``` r
 fm.s = as.formula(paste("soil ~ ", paste(names(grid.dist0), collapse="+"), " + SW_occurrence + dist"))
@@ -553,13 +556,13 @@ str(pred.grids@data)
     ##  $ pred_soil1: num  0.716 0.713 0.713 0.693 0.713 ...
     ##  $ pred_soil2: num  0.246 0.256 0.256 0.27 0.256 ...
     ##  $ pred_soil3: num  0.0374 0.0307 0.0307 0.0374 0.0307 ...
-    ##  $ se_soil1  : num  0.1798 0.1685 0.1685 0.0902 0.1685 ...
-    ##  $ se_soil2  : num  0.1451 0.0803 0.0803 0.0788 0.0803 ...
-    ##  $ se_soil3  : num  0.0404 0.0402 0.0402 0.0404 0.0402 ...
+    ##  $ se_soil1  : num  0.181 0.1695 0.1695 0.0899 0.1695 ...
+    ##  $ se_soil2  : num  0.1446 0.081 0.081 0.0797 0.081 ...
+    ##  $ se_soil3  : num  0.0394 0.0393 0.0393 0.0394 0.0393 ...
 
-where `pred_soil1` is the probability of occurrence of class 1 and `se_soil1` is the standard error of prediction for the `pred_soil1` based on the Jackknife-after-Bootstrap method (Wager et al., 2014). The first column contains existing map of `soil` with hard classes only.
+where `pred_soil1` is the probability of occurrence of class 1 and `se_soil1` is the standard error of prediction for the `pred_soil1` based on the Jackknife-after-Bootstrap method (Wager et al., 2014). The first column in `pred.grids` contains existing map of `soil` with hard classes only.
 
-![figure](./RF_vs_kriging/results/meuse/Fig_comparison_uncertainty_Factor_variables_meuse.png) *Figure: Predictions of soil types for the meuse data set based on the RFsp: (above) probability for three soil classes, and (below) standard errors per class.*
+![figure](./RF_vs_kriging/results/meuse/Fig_comparison_uncertainty_Factor_variables_meuse.png) *Figure: Predictions of soil types for the meuse data set based on the RFsp: (above) probability for three soil classes, and (below) derived standard errors per class.*
 
 In summary, spatial prediction of binomial and factor-type variables is straight forward with ranger: buffer distance and spatial-autocorrelation can be incorporated at once. Compare with geostatistical packages where GLMs with logit link function and/or indicator kriging would need to be used, and which requires that variograms are fitted per class.
 
@@ -588,7 +591,7 @@ coordinates(sic.test) <- ~x+y
 pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
 ```
 
-    ## R 2018-02-04 13:23:37 interpolating 200 observations, 808 prediction locations
+    ## R 2018-02-23 11:54:36 interpolating 200 observations, 808 prediction locations
 
     ## Warning in predictTime(nObs = dim(observations)[1], nPred = nPred, formulaString = formulaString, : 
     ##  using standard model for estimating time. For better 
@@ -596,7 +599,7 @@ pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
     ##  timeModels <- generateTimeModels()
     ##   and save the workspace
 
-    ## [1] "estimated time for  copula 69.7872319511226"
+    ## [1] "estimated time for  copula 71.8158536065304"
     ## Checking object ... OK
 
     ## Warning in ks.test(data, pnorm, mu, sigma): ties should not be present for
@@ -668,8 +671,8 @@ m1.gamma
     ## Mtry:                             1 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       12956.3 
-    ## R squared (OOB):                  0.1288763
+    ## OOB prediction error (MSE):       12410.81 
+    ## R squared (OOB):                  0.1655526
 
 these predictions (when evaluated using the validation points) show better accuracy than obtained using the `interpolate` function:
 
@@ -679,16 +682,18 @@ ov.test <- over(sic.test, de2km["gamma_rfd1"])
 sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
 ```
 
-    ## [1] 66.12989
+    ## [1] 64.31389
 
 this number matches also the average score generated by multiple groups at the SIC 2004 (G. Dubois, 2005). So in summary, although the OOB prediction error for the model above is still relatively high, RFsp manages to produce more accurate predictions than the `interpolate` function, probably because it does better job in accounting for the local hot-spots. Note also we set `mtry=1` here on purpose low because otherwise importance of the individual 1–2 hotspots would drop significantly.
 
 ![RFsp predicted gamma radiometrics with two extreme values.](README_files/figure-markdown_github/RF_SIC2004joker-1.png)
 
+In summary RFsp has a potential to produce maps also for variables with extereme values i.e. very skewed distributions, but this does require that some parameters of RFsp (`mtry`) are carefuly fine-tuned.
+
 Weighted RFsp
 -------------
 
-In many cases training data sets (points) come with variable measurement errors or have been collected with a sampling bias. Package ranger allows this via the argument `case.weights` — observations with larger weights will be selected with higher probability in the bootstrap, so that the output model will be (correctly) more influenced by observations with higher weights. Consider for example this soil point data set prepared as a combination of (a) the National Cooperative Soil Survey (NCSS) Characterization Database, and (b) National Soil Information System (NASIS) points (Ramcharan et al., 2017):
+In many cases training data sets (points) come with variable measurement errors or have been collected with a sampling bias. Package ranger allows incorporating data quality into the modeling process via the argument `case.weights` — observations with larger weights will be selected with higher probability in the bootstrap, so that the output model will be (correctly) more influenced by observations with higher weights. Consider for example this soil point data set prepared as a combination of (a) the National Cooperative Soil Survey (NCSS) Characterization Database i.e. highly accurate laboratory measurements, and (b) National Soil Information System (NASIS) points i.e. quick observations of soil texture (Ramcharan et al., 2018):
 
 ``` r
 carson <- read.csv(file="./RF_vs_kriging/data/NRCS/carson_CLYPPT.csv")
@@ -732,7 +737,7 @@ fm.clay
     ##     T10MOD3_1km + T11MOD3_1km + T12MOD3_1km + TWIMRG5_1km + VBFMRG5_1km + 
     ##     VDPMRG5_1km
 
-Note that, because many soil properties are measured at multiple depth, we fit here a 3D spatial prediction model that also takes `DEPTH` into account. This is in fact a rather large data set that we can subset to speed up computing:
+Note that, because many soil properties are measured at multiple depth, we fit here a 3D spatial prediction model that also takes `DEPTH` into account. This is in fact a rather large data set that we can subset to e.g. 2000 point pairs to speed up computing:
 
 ``` r
 rm.carson <- rm.carson[complete.cases(rm.carson[,all.vars(fm.clay)]),]
@@ -758,17 +763,17 @@ m.clay
     ## Mtry:                             25 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       195.5063 
-    ## R squared (OOB):                  0.2162897
+    ## OOB prediction error (MSE):       194.2382 
+    ## R squared (OOB):                  0.2004129
 
-in this case we used inverse measurement variance as `case.weights` so that points that were measured in the lab will receive much higher weights. Final output map below shows that, in this specific case, the model without weights seems to predict somewhat higher values, especially in the extrapolation areas. This indicates that using measurement errors in model calibration is important and one should not avoid specifying this in the model, especially if the training data is heterogeneous.
+in this case we used inverse measurement variance as `case.weights` so that points that were measured in the lab will receive much higher weights. Final output map below shows that, in this specific case, the model without weights seems to predict somewhat higher values, especially in the extrapolation areas. This indicates that using measurement errors in model calibration is important and one should not avoid specifying this in the model, especially if the training data is significantly heterogeneous.
 
 ![figure](./RF_vs_kriging/results/NRCS/Fig_clay_RF_weighted.png) *Figure: RF predictions and predictions errors for clay content with and without using measurement errors as weights. Study area around the Lake Tahoe, California USA. Point data sources: National Cooperative Soil Survey (NCSS) Characterization Database and National Soil Information System (NASIS).*
 
 Spatial prediction of multivariate problems
 -------------------------------------------
 
-Because RF is a decision tree-based method, this opens a possibility to model multiple variables within a single model i.e. by using type of variable as a factor-type covariate. Consider for example the National Geochemical Survey database that contains over 70,000 sampling points spread over the USA (Grossman, Grosz, Schweitzer, & Schruben, 2004). Here we use a subset of this data with 2858 points with measurements of Pb, Cu, K and Mg covering the US states Illinois and Indiana. Some useful covariates to help explain distribution of elements in stream sediments and soils have been previously prepared (Hengl, 2009) and include:
+Because RF is a decision tree-based method, this opens a possibility to model multiple variables within a single model i.e. by using type of variable as a factor-type covariate. Consider for example the National Geochemical Survey database that contains over 70,000 sampling points spread over the USA (Grossman, Grosz, Schweitzer, & Schruben, 2004). Here we use a subset of this data with 2858 points with measurements of Pb, Cu, K and Mg covering the US states Illinois and Indiana. Some useful covariates to help explain distribution of elements in stream sediments and soils have been previously prepared (Hengl, 2009):
 
 ``` r
 geochem = readRDS("./RF_vs_kriging/data/geochem/geochem.rds")
@@ -902,7 +907,7 @@ grid.distP <- GSIF::buffer.dist(co_locs.sp["STATION"], co_grids[1], as.factor(1:
 dnP <- paste(names(grid.distP), collapse="+")
 ```
 
-so that we can define a *hybrid* space-time model that can be used to predict daily rainfall as a function of time, covariates and buffer distances:
+so that we can define a *hybrid* space-time model that can be used to predict daily rainfall as a function of time, covariates and buffer distances (i.e. geographical space):
 
 ``` r
 fmP <- as.formula(paste("PRCP ~ cdate + doy + elev_1km + PRISM_prec +", dnP))
@@ -953,7 +958,7 @@ fmP
     ##     layer.219 + layer.220 + layer.221 + layer.222 + layer.223 + 
     ##     layer.224 + layer.225
 
-We finally bind buffer distances, values of covariates and time-variables to produce a single space-time regression matrix:
+To produce the space-time regression matrix we bind together buffer distances, values of covariates and time-variables:
 
 ``` r
 ov.prec <- do.call(cbind, list(co_locs.sp@data, over(co_locs.sp, grid.distP), over(co_locs.sp, co_grids[c("elev_1km","PRISM_prec")])))
@@ -966,13 +971,15 @@ rm.prec <- plyr::join(co_prec, ov.prec)
 rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]),]
 ```
 
-Fitting of RFsp follow the same framework as used in all other examples. Based on this model, we can generate predictions through the space-time domain of interest, which typically results in producing time-series of raster maps as indicated below.
+Further fitting of RFsp for this spacetime data follows the same framework as used in all other examples previously. Based on this model, we can generate predictions through the space-time domain of interest, which typically results in producing time-series of raster maps as indicated below.
 
 ![figure](./RF_vs_kriging/results/st_prec/Fig_st_prec_predictions.png) *Figure: Spatiotemporal observations (points) and predictions of daily rainfall in mm for four day in February using the RFsp method: (above) predictions, (below) standard deviation of prediction errors estimated using the ranger package.*
 
-Note from the maps above that some hot spots in the prediction error maps from previous days might propagate to other days, which indicates spatiotemporal connection between values. This shows that RFsp connects space and time in a similar way as the model-based geostatistics.
+Note from the maps above that some hot spots in the prediction error maps from previous days might propagate to other days, which indicates spatiotemporal connection between values. This shows that RFsp considers space and time in a similar way as the model-based geostatistics i.e. as a continuous space.
 
-In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;200 point locations (hence &gt;&gt;200 buffer distance maps) is problably not yet recommended. For all other details please refer to the paper.
+One disadvantage of fitting spatiotemporal models using station data is that the actual accuracy of this models need to be assessed using leave-locations-out cross-validation (Meyer, Reudenbach, Hengl, Katurji, & Nauss, 2018), otherwise RF might give an overoptimistic estimate of the actual accuracy. This happens because RF learns also from "location" so that the realistic estimate of accuracy can often be [significantly lower](https://pat-s.github.io/sperrorest/articles/spatial-modeling-use-case.html) than if this issue is ignored.
+
+In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;200 point locations (hence &gt;&gt;200 buffer distance maps) is problably not yet recommended. Also cross-validation of accuracy of predictions produced using RFsp needs to be implemented using leave-location-out CV to account for spatial autocorrelation in data. For all other details please refer to the paper.
 
 References
 ----------
@@ -991,11 +998,13 @@ Hijmans, R. J., & Etten, J. van. (2017). *Raster: Geographic data analysis and m
 
 Meinshausen, N. (2006). Quantile regression forests. *Journal of Machine Learning Research*, *7*(Jun), 983–999.
 
+Meyer, H., Reudenbach, C., Hengl, T., Katurji, M., & Nauss, T. (2018). Improving performance of spatio-temporal machine learning models using forward feature selection and target-oriented validation. *Environmental Modelling & Software*, *101*, 1–9. doi:[10.1016/j.envsoft.2017.12.001](https://doi.org/10.1016/j.envsoft.2017.12.001)
+
 Pebesma, E., Cornford, D., Dubois, G., Heuvelink, G. B., Hristopulos, D., Pilz, J., … Skøien, J. O. (2011). INTAMAP: The design and implementation of an interoperable automated interpolation web service. *Computers & Geosciences*, *37*(3), 343–352.
 
 Pekel, J.-F., Cottam, A., Gorelick, N., & Belward, A. S. (2016). High-resolution mapping of global surface water and its long-term changes. *Nature*, *504*, 418–422.
 
-Ramcharan, A., Hengl, T., Nauman, T., Brungard, C., Waltman, S., Wills, S., & Thompson, J. (2017). Soil property and class maps of the conterminous us at 100 meter spatial resolution based on a compilation of national soil point observations and machine learning. *Soil Science Society of America Journal*, *in press*. doi:[10.2136/sssaj2017.04.0122](https://doi.org/10.2136/sssaj2017.04.0122)
+Ramcharan, A., Hengl, T., Nauman, T., Brungard, C., Waltman, S., Wills, S., & Thompson, J. (2018). Soil property and class maps of the conterminous us at 100 meter spatial resolution based on a compilation of national soil point observations and machine learning. *Soil Science Society of America Journal*, *82*, 186–201. doi:[10.2136/sssaj2017.04.0122](https://doi.org/10.2136/sssaj2017.04.0122)
 
 Wager, S., Hastie, T., & Efron, B. (2014). Confidence intervals for random forests: The jackknife and the infinitesimal jackknife. *Journal of Machine Learning Research*, *15*(1), 1625–1651.
 
