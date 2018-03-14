@@ -22,7 +22,7 @@ Hengl, T., Nussbaum, M., and Wright, M.N.
 
 ------------------------------------------------------------------------
 
-**Abstract**: This tutorial explains how to use Random Forest to generate spatial and spatiotemporal predictions (i.e. to make maps from point observations using Random Forest). Spatial auto-correlation, especially if still existent in the cross-validation residuals, indicates that the predictions are maybe biased, and this is suboptimal. To account for this, we use Random Forest (as implemented in the ranger package) in combination with geographical distances to sampling locations to fit models and predict values. We describe eight typical situations of interest to spatial prediction applications: (1) prediction of 2D continuous variable without any covariates, (2) prediction of 2D variable with covariates, (3) prediction of binomial variable, (4) prediction of categorical variable, (5) prediction of variables with extreme values, (6) weighted regression, (7) predictions of multivariate problems, and (8) prediction of spatio-temporal variable. Our results indicate that RFsp can produce comparable results to model-based geostatistics. The advantage of RFsp over model-based geostatistics is that RFsp requires much less statistical assumptions and is easier to automate (and scale up through parallelization). On the other hand, computational intensity of RFsp can blow up as the number of training points and covariates increases. RFsp is still an experimental method and application with large data sets (&gt;&gt;1000 points) is not recommended. This is a supplementary material prepared for the need of a scientific article: Hengl, T., Nussbaum, M., Wright, M. and Heuvelink, G.B.M., 2018. [*"Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables"*](https://peerj.com/manuscripts/26646/), PeerJ (in review). To download all data sets and more detail code examples please refer to <https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging>
+**Abstract**: This tutorial explains how to use Random Forest to generate spatial and spatiotemporal predictions (i.e. to make maps from point observations using Random Forest). Spatial auto-correlation, especially if still existent in the cross-validation residuals, indicates that the predictions are maybe biased, and this is suboptimal. To account for this, we use Random Forest (as implemented in the ranger package) in combination with geographical distances to sampling locations to fit models and predict values. We describe eight typical situations of interest to spatial prediction applications: (1) prediction of 2D continuous variable without any covariates, (2) prediction of 2D variable with covariates, (3) prediction of binomial variable, (4) prediction of categorical variable, (5) prediction of variables with extreme values, (6) weighted regression, (7) predictions of multivariate problems, and (8) prediction of spatio-temporal variable. Our results indicate that RFsp can produce comparable results to model-based geostatistics. The advantage of RFsp over model-based geostatistics is that RFsp requires much less statistical assumptions and is easier to automate (and scale up through parallelization). On the other hand, computational intensity of RFsp can blow up as the number of training points and covariates increases. RFsp is still an experimental method and application with large data sets (&gt;&gt;1000 points) is not recommended. This is a supplementary material prepared for the need of a scientific article: Hengl, T., Nussbaum, M., Wright, M. and Heuvelink, G.B.M., 2018. [*"Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables"*](https://peerj.com/preprints/26693/), PeerJ (in review). To download all data sets and more detail code examples please refer to <https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging>
 
 Installing and loading packages
 -------------------------------
@@ -180,7 +180,7 @@ zinc.rfd <- predict(m.zinc, grid.dist0@data, type="quantiles", quantiles=quantil
 str(zinc.rfd)
 ```
 
-    ##  num [1:3103, 1:3] 257 257 257 257 257 ...
+    ##  num [1:3103, 1:3] 257 257 257 257 257 257 257 257 269 257 ...
     ##  - attr(*, "dimnames")=List of 2
     ##   ..$ : NULL
     ##   ..$ : chr [1:3] "quantile= 0.159" "quantile= 0.5" "quantile= 0.841"
@@ -585,9 +585,9 @@ str(pred.grids@data)
     ##  $ pred_soil1: num  0.716 0.713 0.713 0.693 0.713 ...
     ##  $ pred_soil2: num  0.246 0.256 0.256 0.27 0.256 ...
     ##  $ pred_soil3: num  0.0374 0.0307 0.0307 0.0374 0.0307 ...
-    ##  $ se_soil1  : num  0.1805 0.169 0.169 0.0902 0.169 ...
-    ##  $ se_soil2  : num  0.1451 0.0797 0.0797 0.0782 0.0797 ...
-    ##  $ se_soil3  : num  0.0405 0.0403 0.0403 0.0405 0.0403 ...
+    ##  $ se_soil1  : num  0.181 0.1694 0.1694 0.0899 0.1694 ...
+    ##  $ se_soil2  : num  0.1445 0.0811 0.0811 0.0799 0.0811 ...
+    ##  $ se_soil3  : num  0.0385 0.0383 0.0383 0.0385 0.0383 ...
 
 where `pred_soil1` is the probability of occurrence of class 1 and `se_soil1` is the standard error of prediction for the `pred_soil1` based on the Jackknife-after-Bootstrap method (Wager et al., 2014). The first column in `pred.grids` contains existing map of `soil` with hard classes only.
 
@@ -610,7 +610,7 @@ coordinates(sic.test) <- ~x+y
 pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
 ```
 
-    ## R 2018-03-14 09:39:16 interpolating 200 observations, 808 prediction locations
+    ## R 2018-03-14 12:18:28 interpolating 200 observations, 808 prediction locations
 
     ## Warning in predictTime(nObs = dim(observations)[1], nPred = nPred, formulaString = formulaString, : 
     ##  using standard model for estimating time. For better 
@@ -618,34 +618,23 @@ pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
     ##  timeModels <- generateTimeModels()
     ##   and save the workspace
 
-    ## [1] "estimated time for  copula 69.9954630155868"
+    ## Warning in predLoess(object$y, object$x, newx = if
+    ## (is.null(newdata)) object$x else if (is.data.frame(newdata))
+    ## as.matrix(model.frame(delete.response(terms(object)), : pseudoinverse used
+    ## at 3.1697 0.0967 0
+
+    ## Warning in predLoess(object$y, object$x, newx = if
+    ## (is.null(newdata)) object$x else if (is.data.frame(newdata))
+    ## as.matrix(model.frame(delete.response(terms(object)), : neighborhood radius
+    ## 3.8654
+
+    ## Warning in predLoess(object$y, object$x, newx = if
+    ## (is.null(newdata)) object$x else if (is.data.frame(newdata))
+    ## as.matrix(model.frame(delete.response(terms(object)), : reciprocal
+    ## condition number 0
+
+    ## [1] "estimated time for  copula 148.48166666667"
     ## Checking object ... OK
-
-    ## Warning in ks.test(data, pnorm, mu, sigma): ties should not be present for
-    ## the Kolmogorov-Smirnov test
-
-    ## Warning in ks.test(data, pnorm, mu, sigma): ties should not be present for
-    ## the Kolmogorov-Smirnov test
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in ks.test(data, pt, params[2], params[1]): ties should not be
-    ## present for the Kolmogorov-Smirnov test
-
-    ## Warning in ks.test(data, plogis, params[1], params[2]): ties should not be
-    ## present for the Kolmogorov-Smirnov test
 
 where `interpolate` is a fully automated framework for spatial predictions that selects from 5--6 state-of-the-art methods (Pebesma et al., 2011). The resulting error at validation points seems to be relatively high, which is probably due to the choice of transformation and/or variogram model:
 
@@ -653,7 +642,7 @@ where `interpolate` is a fully automated framework for spatial predictions that 
 sd(sic.test$joker-pred.sic2004$predictions$mean)
 ```
 
-    ## [1] 104.2748
+    ## [1] NA
 
 We can test predicting those values also using RFsp. First, we need to prepare geographical covariates:
 
@@ -690,8 +679,8 @@ m1.gamma
     ## Mtry:                             1 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       12919.65 
-    ## R squared (OOB):                  0.1313404
+    ## OOB prediction error (MSE):       13318.23 
+    ## R squared (OOB):                  0.1045414
 
 these predictions (when evaluated using the validation points) show better accuracy than obtained using the `interpolate` function:
 
@@ -701,7 +690,7 @@ ov.test <- over(sic.test, de2km["gamma_rfd1"])
 sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
 ```
 
-    ## [1] 63.6682
+    ## [1] 66.96197
 
 this number matches also the average score generated by multiple groups at the SIC 2004 (G. Dubois, 2005). So in summary, although the OOB prediction error for the model above is still relatively high, RFsp manages to produce more accurate predictions than the `interpolate` function, probably because it does better job in accounting for the local hot-spots. Note also we set `mtry=1` here on purpose low because otherwise importance of the individual 1–2 hotspots would drop significantly.
 
@@ -782,8 +771,8 @@ m.clay
     ## Mtry:                             25 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       186.5363 
-    ## R squared (OOB):                  0.2426249
+    ## OOB prediction error (MSE):       195.2935 
+    ## R squared (OOB):                  0.2137698
 
 in this case we used inverse measurement variance as `case.weights` so that points that were measured in the lab will receive much higher weights. Final output map below shows that, in this specific case, the model without weights seems to predict somewhat higher values, especially in the extrapolation areas. This indicates that using measurement errors in model calibration is important and one should not avoid specifying this in the model, especially if the training data is significantly heterogeneous.
 
@@ -998,7 +987,7 @@ Note from the maps above that some hot spots in the prediction error maps from p
 
 One disadvantage of fitting spatiotemporal models using station data is that the actual accuracy of this models need to be assessed using leave-locations-out cross-validation (Meyer, Reudenbach, Hengl, Katurji, & Nauss, 2018), otherwise ranger might give an overoptimistic estimate of the actual accuracy. This happens because RF learns also from *"location"* so that the realistic estimate of accuracy can often be [significantly lower](https://pat-s.github.io/sperrorest/articles/spatial-modeling-use-case.html) if this issue is ignored.
 
-In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;1000 point locations (hence &gt;&gt;1000 buffer distance maps) is problably not yet recommended. Also cross-validation of accuracy of predictions produced using RFsp needs to be implemented using leave-location-out CV to account for spatial autocorrelation in data. For all other details please refer to [our paper](https://peerj.com/manuscripts/26646/).
+In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;1000 point locations (hence &gt;&gt;1000 buffer distance maps) is problably not yet recommended. Also cross-validation of accuracy of predictions produced using RFsp needs to be implemented using leave-location-out CV to account for spatial autocorrelation in data. For all other details please refer to [our paper](https://peerj.com/preprints/26693/).
 
 References
 ----------
