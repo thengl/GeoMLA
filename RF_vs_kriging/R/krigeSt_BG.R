@@ -17,7 +17,9 @@ co_locs.sp = spTransform(co_locs.sp, co_grids@proj4string)
 
 co_time <- as.POSIXct(co_prec$DATE)
 
-stsdf <- STIDF(as(co_locs.sp, "SpatialPoints"), co_time, co_prec)
+data <- co_prec[,"PRCP", drop=FALSE]
+
+stsdf <- STIDF(as(co_locs.sp, "SpatialPoints")[!is.na(data)], co_time[!is.na(data)], data[!is.na(data),,drop=F])
 stsdf <- as(stsdf, "STSDF")
 
 empStVgm <- gstat::variogramST(PRCP~1, stsdf, tlags = 0:3)
@@ -42,3 +44,24 @@ plot(empStVgm, list(metFit, smmFit), all=T, wireframe=F)
 plot(empStVgm, wireframe=T)
 plot(empStVgm, smmFit, wireframe=T)
 
+## interpolation
+# re-scale
+smmFit$space$range <- smmFit$space$range*1e3
+smmFit$joint$range <- smmFit$joint$range*1e3
+smmFit$stAni <- smmFit$stAni*1e3
+  
+predST <- krigeST(PRCP~1, stsdf[,1:10], STF(co_grids, time = stsdf@time[1:10]), smmFit)
+
+stplot(predST)
+
+
+# LOOCV:
+stationId <- 1
+boolSel <- stsdf@index[,1] == stationId
+
+stopifnot(sum(boolSel)>0)
+
+pred_loocv <- krigeST(PRCP~1, stsdf[!boolSel,,drop=F], stsdf[boolSel,,drop=F], smmFit, nmax=5)
+
+library(lattice)
+xyplot(var1.pred~PRCP, pred_loocv@data)
