@@ -37,9 +37,22 @@ smmFit <- fit.StVariogram(empStVgm, vgmST("sumMetric",
                                           space=vgm(0.035, "Sph", 30, 0.05),
                                           time=vgm(0.035, "Sph", 60, 0.001),
                                           joint=vgm(0.035, "Sph", 30, 0.001),
-                                          nugget=0.005, stAni=1))
+                                          stAni=1),
+                          lower=c(0,0.01,0,
+                                  0,0.01,0,
+                                  0,0.01,0,
+                                  0.05),
+                          control=list(parscale=c(1,1e3,1,
+                                                  1,1e3,1,
+                                                  1,1e3,1,
+                                                  1)))
+
+attr(smmFit, "MSE")
+plot(empStVgm, smmFit, wireframe=TRUE)
 
 plot(empStVgm, list(metFit, smmFit), all=T, wireframe=F)
+plot(empStVgm, list(metFit, smmFit), all=T, wireframe=T)
+plot(empStVgm, list(metFit, smmFit), diff=T, wireframe=T)
 
 plot(empStVgm, wireframe=T)
 plot(empStVgm, smmFit, wireframe=T)
@@ -53,6 +66,79 @@ smmFit$stAni <- smmFit$stAni*1e3
 predST <- krigeST(PRCP~1, stsdf[,1:10], STF(co_grids, time = stsdf@time[1:10]), smmFit)
 
 stplot(predST)
+stplot(stsdf[,1:11,"PRCP"], number=10)
+
+# LOOCV:
+stationId <- 7
+boolSel <- stsdf@index[,1] == stationId
+
+stopifnot(sum(boolSel)>0)
+
+pred_loocv <- krigeST(PRCP~1, stsdf[!boolSel,,drop=F], stsdf[boolSel,,drop=F], smmFit, nmax=10)
+
+pred_loocv@data$var1.pred[pred_loocv@data$var1.pred < 0] <- 0
+
+library(lattice)
+xyplot(var1.pred~PRCP, pred_loocv@data)
+
+
+
+## some rather crazy ideas using a marginal tansform
+hist(stsdf@data$PRCP)
+
+stsdf@data$rnkPRCP <- (rank(stsdf@data$PRCP, ties.method = "min")-1)/length(stsdf@data$PRCP)
+stsdf@data$rnkPRCP[stsdf@data$rnkPRCP == 0] <- 0.5
+stsdf@data$rnkPRCP <- qnorm(stsdf@data$rnkPRCP)
+hist(stsdf@data$rnkPRCP)
+
+stplot(stsdf[,1:10,"rnkPRCP"])
+
+empStVgmRnk <- variogramST(rnkPRCP~1, stsdf, tlags = 0:3, width=30000/10)
+plot(empStVgmRnk, wireframe=TRUE, scales=list(arrows=F))
+
+
+# rescale to ease optim
+empStVgmRnk$dist <- empStVgmRnk$dist/1e3
+empStVgmRnk$avgDist <- empStVgmRnk$avgDist/1e3
+
+metFit <- fit.StVariogram(empStVgmRnk, 
+                          vgmST("metric", joint=vgm(0.35, "Sph", 30, 0.05), stAni=1))
+attr(metFit, "MSE")
+
+smmFit <- fit.StVariogram(empStVgmRnk, 
+                          vgmST("sumMetric", 
+                                space=vgm(0.15, "Sph", 30, 0.01),
+                                time=vgm(0.15, "Sph", 60, 0.01),
+                                joint=vgm(0.15, "Sph", 30, 0.01),
+                                stAni=1),
+                          lower=c(0,0.01,0,
+                                  0,0.01,0,
+                                  0,0.01,0,
+                                  0.05),
+                          control=list(parscale=c(1,1e3,1,
+                                                  1,1e3,1,
+                                                  1,1e3,1,
+                                                  1)))
+attr(smmFit, "MSE")
+plot(empStVgmRnk, smmFit, wireframe=TRUE)
+
+plot(empStVgmRnk, list(metFit, smmFit), all=T, wireframe=T, diff=F, scales=list(arrows=F))
+plot(empStVgmRnk, list(metFit, smmFit), all=T, wireframe=T, diff=T, scales=list(arrows=F))
+
+## interpolation
+# re-scale
+smmFit$space$range <- smmFit$space$range*1e3
+smmFit$joint$range <- smmFit$joint$range*1e3
+smmFit$stAni <- smmFit$stAni*1e3
+
+predST <- krigeST(rnkPRCP~1, stsdf[,1:10], STF(co_grids, time = stsdf@time[1:10]), smmFit, nmax=10)
+
+stplot(predST, sp.layout=list(spatial.points=stsdf@sp))
+stplot(stsdf[,1:11,"rnkPRCP"], number=10)
+
+hist(pnorm(predST@data$var1.pred))
+
+hist(predST@data$var1.pred)
 
 
 # LOOCV:
@@ -65,3 +151,4 @@ pred_loocv <- krigeST(PRCP~1, stsdf[!boolSel,,drop=F], stsdf[boolSel,,drop=F], s
 
 library(lattice)
 xyplot(var1.pred~PRCP, pred_loocv@data)
+
