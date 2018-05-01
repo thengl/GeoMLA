@@ -114,7 +114,8 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
   MAE.SE = mean(abs(out$Observed - out$Predicted) - out$sdPE, na.rm=TRUE)
   ## https://en.wikipedia.org/wiki/Coefficient_of_determination
   #R.squared = 1-sum(( (out$Observed - out$Predicted) - mean(out$Observed - out$Predicted) )^2)/(var(out$Observed, na.rm=TRUE)*(sum(!is.na(out$Observed))-1))
-  R.squared = 1-var(out$Observed - out$Predicted, na.rm=TRUE)/var(out$Observed, na.rm=TRUE)
+  R.squared = 1 - (t(out$Observed - out$Predicted) %*% (out$Observed - out$Predicted)) / (t(out$Observed - mean(out$Observed)) %*% (out$Observed - mean(out$Observed)))
+  ccc = DescTools::CCC(out$Observed, out$Predicted, ci = "z-transform", conf.level = 0.95, na.rm=TRUE)$rho.c
   if(Log==TRUE){
     ## If the variable is log-normal then logR.squared is probably more correct
     ##>> MN: logRMSE ----
@@ -125,10 +126,10 @@ cv_numeric <- function(varn, points, covs, nfold=5, idcol, method="ranger", cpus
     # performance on original scale not on rather abstract logscale). 
     logRMSE = sqrt(mean((log1p(out$Observed) - log1p(out$Predicted))^2, na.rm=TRUE))
     #logR.squared = 1-sum((log1p(out$Observed) - log1p(out$Predicted))^2, na.rm=TRUE)/(var(log1p(out$Observed), na.rm=TRUE)*sum(!is.na(out$Observed)))
-    logR.squared = 1-var(log1p(out$Observed) - log1p(out$Predicted), na.rm=TRUE)/var(log1p(out$Observed), na.rm=TRUE)
-    cv.r <- list(out, data.frame(ME=ME, MAE=MAE, RMSE=RMSE, MAE.SE=MAE.SE, MZS=MZS, ZSV=ZSV, R.squared=R.squared, logRMSE=logRMSE, logR.squared=logR.squared)) 
+    logR.squared = 1 - (t(log1p(out$Observed) - log1p(out$Predicted)) %*% (log1p(out$Observed) - log1p(out$Predicted))) / (t(log1p(out$Observed) - mean(log1p(out$Observed)) %*% (log1p(out$Observed) - mean(log1p(out$Observed)))))
+    cv.r <- list(out, data.frame(ME=ME, MAE=MAE, RMSE=RMSE, MAE.SE=MAE.SE, MZS=MZS, ZSV=ZSV, R.squared=R.squared, logRMSE=logRMSE, logR.squared=logR.squared, CCC_est=ccc$est, CCC_lwr=ccc$lwr.ci, CCC_upr=ccc$upr.ci)) 
   } else {
-    cv.r <- list(out, data.frame(ME=ME, MAE=MAE, RMSE=RMSE, MAE.SE=MAE.SE, MZS=MZS, ZSV=ZSV, R.squared=R.squared))
+    cv.r <- list(out, data.frame(ME=ME, MAE=MAE, RMSE=RMSE, MAE.SE=MAE.SE, MZS=MZS, ZSV=ZSV, R.squared=R.squared, CCC_est=ccc$est, CCC_lwr=ccc$lwr.ci, CCC_upr=ccc$upr.ci))
   }
   message("DONE")
   names(cv.r) <- c("CV_residuals", "Summary")

@@ -1,13 +1,13 @@
 ## Comparison RF vs kriging, see slides at: https://github.com/ISRICWorldSoil/GSIF_tutorials/blob/master/geul/5H_Hengl.pdf
 ## By: tom.hengl@gmail.com, contributions by: Madlene Nussbaum <madlene.nussbaum@bfh.ch> and Marvin Wright <marv@wrig.de>
-## Cite as: Hengl et al., "Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables", submitted to PeerJ
+## Cite as: Hengl et al., "Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables", https://peerj.com/preprints/26693/
 ## Licence: GNU GPL
 
-list.of.packages <- c("plyr", "parallel", "randomForest", "quantregForest", "plotKML", "GSIF", "RCurl", "raster", "rgdal", "geoR", "gstat", "scales", "gdistance", "entropy", "lattice", "gridExtra", "intamap", "maxlike", "spatstat")
+list.of.packages <- c("plyr", "parallel", "randomForest", "quantregForest", "plotKML", "GSIF", "RCurl", "raster", "rgdal", "geoR", "gstat", "scales", "gdistance", "entropy", "lattice", "gridExtra", "intamap", "maxlike", "spatstat", "DescTools", "gdistance")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages, dependencies = TRUE)
 
-setwd("~/git/GeoMLA/RF_vs_kriging")
+setwd("/data/git/GeoMLA/RF_vs_kriging")
 load(".RData")
 library(GSIF)
 library(rgdal)
@@ -27,11 +27,13 @@ library(maxlike)
 library(spatstat)
 library(entropy)
 library(gdistance)
+library(DescTools)
 
 ## RANGER connected packages (best install from github):
 #devtools::install_github("imbs-hl/ranger")
 library(ranger)
 ## http://philipppro.github.io/Tuning_random_forest/
+#devtools::install_github("mlr-org/mlrMBO")
 #devtools::install_github("PhilippPro/tuneRF")
 library(tuneRanger)
 ## Load all functions prepared for this exerice:
@@ -127,6 +129,7 @@ cv.RF = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="r
 cv.OK = cv_numeric(varn="zinc", points=meuse, covs=meuse.grid, cpus=1, method="geoR", OK=TRUE, spcT=FALSE)
 cv.RF$Summary
 cv.OK$Summary
+cv.RF$Summary$CCC_est^2; cv.OK$Summary$CCC_est^2
 ## Compare with the standard error of the mean:
 sqrt(var(meuse$zinc)/nrow(meuse))
 ## Plot residuals vgm:
@@ -281,10 +284,11 @@ points(sic97.sp, pch="+")
 dev.off()
 
 ## Cross-validation SIC 1997 ----
-## (computationally intensive - takes few minutes!!)
+## (computationally intensive - takes few minutes because buffer distances have to be re-computed!)
 cv.RF2 = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="ranger", spcT=FALSE, pars.ranger = pars.rain[-c(5)])
-dn0 <- c() # FIXME
 cv.UK = cv_numeric(varn="rainfall", points=sic97.sp, covs=swiss1km[c("CHELSA_rainfall","DEM")], cpus=1, method="geoR", spcT=FALSE)
+cv.RF2$Summary
+cv.UK$Summary
 cv.RF2$Summary$RMSE^2/var(sic97.sp$rainfall); cv.RF2$Summary$R.squared; cv.RF2$Summary$ZSV; cv.RF2$Summary$MAE.SE
 cv.UK$Summary$RMSE^2/var(sic97.sp$rainfall); cv.UK$Summary$R.squared;  cv.UK$Summary$ZSV; cv.UK$Summary$MAE.SE
 sqrt(var(sic97.sp$rainfall)/nrow(sic97.sp))
