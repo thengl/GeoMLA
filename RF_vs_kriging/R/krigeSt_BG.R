@@ -120,6 +120,24 @@ png("RF_vs_kriging/results/st_prec/precip_kriged_sd.png", width = 2000, height =
 stplot(predST[,,"var1.sd"], main="Kriging standard deviation")
 dev.off()
 
+
+colVec <- colorRampPalette(c("white","lightblue","blue","darkblue"))(100)
+pointCol <- function(x) colVec[findInterval(x, seq(0,1, length.out = 100))]
+
+for (i in 1:6) {
+  ptSub <- stsdf[,(823:828)[i],"PRCP"]
+  png(paste0("RF_vs_kriging/results/st_prec/precip_kriged_", T.lst[i], ".png"),
+      width = 1000, height = 1000, res = 200)
+  print(spplot(predST[,i], "var1.pred", col.regions=colVec, 
+               at=seq(0,1, length.out = 100),
+               main=paste("Kriged precipitation at:", T.lst[i]),
+               sp.layout=list(list(sp.points=ptSub, pch=21, col="darkgrey", cex=1.4),
+                              list(sp.points=ptSub, pch=16, col=pointCol(ptSub@data$PRCP), cex=1.2 ) ),
+               colorkey=list(colVec, at=seq(0,1,length.out = 100))))
+  dev.off()
+}
+
+
 # LOOCV:
 stsdf@data$loocv_pred <- NA
 nSp <- length(stsdf@sp$STATION)
