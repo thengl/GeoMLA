@@ -60,10 +60,10 @@ plot(empStVgm, wireframe=FALSE, scales=list(arrows=F))
 empStVgm$dist <- empStVgm$dist/1e3
 empStVgm$avgDist <- empStVgm$avgDist/1e3
 
-metFit <- fit.StVariogram(empStVgm, vgmST("metric", joint=vgm(0.035, "Sph", 30, 0.005), stAni=0.05))
+metFit <- fit.StVariogram(empStVgm, vgmST("metric", joint=vgm(0.035, "Sph", 120, 0.005), stAni=1.25))
 
 smmFit <- fit.StVariogram(empStVgm, vgmST("sumMetric", 
-                                          space=vgm(0.035, "Sph", 30, 0.05),
+                                          space=vgm(0.015, "Sph", 60, 0.01),
                                           time=vgm(0.035, "Sph", 60, 0.001),
                                           joint=vgm(0.035, "Sph", 30, 0.001),
                                           stAni=1),
@@ -76,15 +76,18 @@ smmFit <- fit.StVariogram(empStVgm, vgmST("sumMetric",
                                                   1,1e3,1,
                                                   1)))
 
-attr(smmFit, "MSE")
+attr(smmFit, "MSE")*1e6
 plot(empStVgm, smmFit, wireframe=TRUE)
-
 plot(empStVgm, list(metFit, smmFit), all=T, wireframe=F)
-plot(empStVgm, list(metFit, smmFit), all=T, wireframe=T)
 plot(empStVgm, list(metFit, smmFit), diff=T, wireframe=T)
 
 plot(empStVgm, wireframe=T)
 plot(empStVgm, smmFit, wireframe=T)
+
+
+png("RF_vs_kriging/results/st_prec/ST-vgm.png", width = 2600, height = 1000, res = 200)
+plot(empStVgm, list(metFit, smmFit), all=T, wireframe=T, scales=list(arrows=FALSE))
+dev.off()
 
 ## interpolation
 # re-scale
@@ -92,10 +95,30 @@ smmFit$space$range <- smmFit$space$range*1e3
 smmFit$joint$range <- smmFit$joint$range*1e3
 smmFit$stAni <- smmFit$stAni*1e3
   
-predST <- krigeST(PRCP~1, stsdf[,1:10], STF(co_grids, time = stsdf@time[1:10]), smmFit)
+predST <- krigeST(PRCP~1, stsdf[,818:833], STF(co_grids, time = stsdf@time[823:828]), 
+                  smmFit, nmax = 10, computeVar = TRUE)
 
-stplot(predST)
-stplot(stsdf[,1:11,"PRCP"], number=10)
+predST@data$var1.sd <- sqrt(predST@data$var1.var) 
+
+library(rgdal)
+T.lst = paste0("2016-02-0", c(1:6))
+for (i in 1:6) {
+  writeGDAL(predST[,i, "var1.pred"], 
+            fname=paste0("RF_vs_kriging/results/st_prec/krigeSt_PRCP_", T.lst[i], ".tif"),
+            options="COMPRESS=DEFLATE", type = "Int16", mvFlag = "-32768")
+  writeGDAL(predST[,i, "var1.sd"], 
+            fname=paste0("RF_vs_kriging/results/st_prec/krigeSt_PRCP_", T.lst[i], "_pe.tif"),
+            options="COMPRESS=DEFLATE", type = "Int16", mvFlag = "-32768")
+}
+
+
+png("RF_vs_kriging/results/st_prec/precip_kriged.png", width = 2000, height = 2000, res = 200)
+stplot(predST[,,"var1.pred"], main="Kriged Precipitations")
+dev.off()
+
+png("RF_vs_kriging/results/st_prec/precip_kriged_sd.png", width = 2000, height = 2000, res = 200)
+stplot(predST[,,"var1.sd"], main="Kriging standard deviation")
+dev.off()
 
 # LOOCV:
 stsdf@data$loocv_pred <- NA
@@ -139,75 +162,3 @@ cor(stsdf@data$PRCP, stsdf@data$loocv_pred, use = "p") # 0.930
 
 hist(stsdf@data$PRCP)
 hist(stsdf@data$loocv_pred)
-
-stsdf@data$PRCP - stsdf@data$loocv_pred
-
-## some rather crazy ideas using a marginal tansform
-hist(stsdf@data$PRCP)
-
-stsdf@data$rnkPRCP <- (rank(stsdf@data$PRCP, ties.method = "min")-1)/length(stsdf@data$PRCP)
-stsdf@data$rnkPRCP[stsdf@data$rnkPRCP == 0] <- 0.5
-stsdf@data$rnkPRCP <- qnorm(stsdf@data$rnkPRCP)
-hist(stsdf@data$rnkPRCP)
-
-stplot(stsdf[,1:10,"rnkPRCP"])
-
-empStVgmRnk <- variogramST(rnkPRCP~1, stsdf, tlags = 0:3, width=30000/10)
-plot(empStVgmRnk, wireframe=TRUE, scales=list(arrows=F))
-
-
-# rescale to ease optim
-empStVgmRnk$dist <- empStVgmRnk$dist/1e3
-empStVgmRnk$avgDist <- empStVgmRnk$avgDist/1e3
-
-metFit <- fit.StVariogram(empStVgmRnk, 
-                          vgmST("metric", joint=vgm(0.35, "Sph", 30, 0.05), stAni=1))
-attr(metFit, "MSE")
-
-smmFit <- fit.StVariogram(empStVgmRnk, 
-                          vgmST("sumMetric", 
-                                space=vgm(0.15, "Sph", 30, 0.01),
-                                time=vgm(0.15, "Sph", 60, 0.01),
-                                joint=vgm(0.15, "Sph", 30, 0.01),
-                                stAni=1),
-                          lower=c(0,0.01,0,
-                                  0,0.01,0,
-                                  0,0.01,0,
-                                  0.05),
-                          control=list(parscale=c(1,1e3,1,
-                                                  1,1e3,1,
-                                                  1,1e3,1,
-                                                  1)))
-attr(smmFit, "MSE")
-plot(empStVgmRnk, smmFit, wireframe=TRUE)
-
-plot(empStVgmRnk, list(metFit, smmFit), all=T, wireframe=T, diff=F, scales=list(arrows=F))
-plot(empStVgmRnk, list(metFit, smmFit), all=T, wireframe=T, diff=T, scales=list(arrows=F))
-
-## interpolation
-# re-scale
-smmFit$space$range <- smmFit$space$range*1e3
-smmFit$joint$range <- smmFit$joint$range*1e3
-smmFit$stAni <- smmFit$stAni*1e3
-
-predST <- krigeST(rnkPRCP~1, stsdf[,1:10], STF(co_grids, time = stsdf@time[1:10]), smmFit, nmax=10)
-
-stplot(predST, sp.layout=list(spatial.points=stsdf@sp))
-stplot(stsdf[,1:11,"rnkPRCP"], number=10)
-
-hist(pnorm(predST@data$var1.pred))
-
-hist(predST@data$var1.pred)
-
-
-# LOOCV:
-stationId <- 1
-boolSel <- stsdf@index[,1] == stationId
-
-stopifnot(sum(boolSel)>0)
-
-pred_loocv <- krigeST(PRCP~1, stsdf[!boolSel,,drop=F], stsdf[boolSel,,drop=F], smmFit, nmax=5)
-
-library(lattice)
-xyplot(var1.pred~PRCP, pred_loocv@data)
-
