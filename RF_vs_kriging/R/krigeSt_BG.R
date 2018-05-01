@@ -15,15 +15,44 @@ co_grids = readRDS("./RF_vs_kriging/data/st_prec/boulder_grids.rds")
 co_grids = as(co_grids, "SpatialPixelsDataFrame")
 co_locs.sp = spTransform(co_locs.sp, co_grids@proj4string)
 
+co_locs.sp@data$PRISM_prec <- over(co_locs.sp, co_grids[c("elev_1km","PRISM_prec")])$PRISM_prec
+
 co_time <- as.POSIXct(co_prec$DATE)
 
-data <- co_prec[,"PRCP", drop=FALSE]
+data <- co_prec[,c("PRCP", "cdate", "doy","ELEVATION"), drop=FALSE]
+data$cosDoy <- cos((data$doy)*pi/365)
 
-stsdf <- STIDF(as(co_locs.sp, "SpatialPoints")[!is.na(data)], co_time[!is.na(data)], data[!is.na(data),,drop=F])
+# summary(lm(PRCP ~ ELEVATION + cosDoy + cdate, data))
+# round(cor(data[sample(176467,1e5),], use = "p")[,4],3)
+
+stsdf <- STIDF(as(co_locs.sp, "SpatialPointsDataFrame")[!is.na(data$PRCP),], co_time[!is.na(data$PRCP)], data[!is.na(data$PRCP),,drop=F])
 stsdf <- as(stsdf, "STSDF")
 
+# df <- as.data.frame(stsdf)
+# summary(lm(PRCP ~ cdate + doy + PRISM_prec, df[]))
+# 
+# stsdf@data$PRISM_prec <- df$PRISM_prec
+# stsdf@data$diff_PRCP <- stsdf@data$PRISM_prec - stsdf@data$PRCP
+#   
+# spplot(co_grids, "PRISM_prec")
+# 
+# round(cor(df[,-c(3:7)], use = "p", method = "kendall")[,4],2)
+
+
+## no covariates - no zero correction
 empStVgm <- gstat::variogramST(PRCP~1, stsdf, tlags = 0:3)
 plot(empStVgm, wireframe=TRUE, scales=list(arrows=F))
+plot(empStVgm, wireframe=FALSE, scales=list(arrows=F))
+
+# ## no covariates - no zero correction
+# empStVgmNoZero <- gstat::variogramST(diff_PRCP~1, stsdf[stsdf@data$PRCP > 0,,drop=F], tlags = 0:3, boundaries=c(0,2000,5000,10000,15000, 20e3, 30e3,40e3), na.omit = TRUE)
+# empStVgmNoZero
+# # <- empStVgmNoZero[!is.nan(empStVgmNoZero$avgDist),]
+# empStVgmNoZero$avgDist
+# 
+# plot(empStVgmNoZero, wireframe=T, scales=list(arrows=F))
+# plot(empStVgmNoZero, wireframe=F, scales=list(arrows=F))
+
 
 ## fit of st vgm
 
@@ -31,7 +60,7 @@ plot(empStVgm, wireframe=TRUE, scales=list(arrows=F))
 empStVgm$dist <- empStVgm$dist/1e3
 empStVgm$avgDist <- empStVgm$avgDist/1e3
 
-metFit <- fit.StVariogram(empStVgm, vgmST("metric", joint=vgm(0.035, "Sph", 30, 0.005), stAni=1))
+metFit <- fit.StVariogram(empStVgm, vgmST("metric", joint=vgm(0.035, "Sph", 30, 0.005), stAni=0.05))
 
 smmFit <- fit.StVariogram(empStVgm, vgmST("sumMetric", 
                                           space=vgm(0.035, "Sph", 30, 0.05),
@@ -69,19 +98,49 @@ stplot(predST)
 stplot(stsdf[,1:11,"PRCP"], number=10)
 
 # LOOCV:
-stationId <- 7
-boolSel <- stsdf@index[,1] == stationId
+stsdf@data$loocv_pred <- NA
+nSp <- length(stsdf@sp$STATION)
 
-stopifnot(sum(boolSel)>0)
-
-pred_loocv <- krigeST(PRCP~1, stsdf[!boolSel,,drop=F], stsdf[boolSel,,drop=F], smmFit, nmax=10)
-
-pred_loocv@data$var1.pred[pred_loocv@data$var1.pred < 0] <- 0
+for (stationId in 221:nSp) {
+  cat("Started to predict station",stationId,"just now. \n") 
+  timing <- Sys.time()
+  pred <- krigeST(PRCP~1, stsdf[(1:nSp)[-stationId],,drop=F], stsdf[stationId,,drop=F], smmFit, nmax=10)@data$var1.pred
+  
+  pred[pred < 0] <- 0
+  
+  # pred_loocv[[stationId]] <- pred
+  predVec <- stsdf@data$loocv_pred
+  predVec[stsdf@index[,1]==stationId] <- pred
+  stsdf@data$loocv_pred <- predVec
+  
+  cat("The prediction took:",Sys.time()-timing,"\n") 
+}
 
 library(lattice)
-xyplot(var1.pred~PRCP, pred_loocv@data)
+plot(stsdf[1,,drop=F]@data$PRCP, stsdf[1,,drop=F]@data$loocv_pred)
+abline(0,1)
 
+# MAE:
+mean(abs(stsdf@data$PRCP - stsdf@data$loocv_pred), na.rm = T) 
 
+# RMSE:
+sqrt(mean((stsdf@data$PRCP - stsdf@data$loocv_pred)^2, na.rm = T)) # 0.069
+
+# ME/bias
+mean(stsdf@data$PRCP - stsdf@data$loocv_pred, na.rm = T) # 0.00005
+
+# COR
+cor(stsdf@data$PRCP, stsdf@data$loocv_pred, use = "p") # 0.930
+
+# MAE:  0.022
+# RMSE: 0.069
+# ME:  <0.000
+# COR:  0.930
+
+hist(stsdf@data$PRCP)
+hist(stsdf@data$loocv_pred)
+
+stsdf@data$PRCP - stsdf@data$loocv_pred
 
 ## some rather crazy ideas using a marginal tansform
 hist(stsdf@data$PRCP)
