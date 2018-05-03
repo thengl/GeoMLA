@@ -574,3 +574,29 @@ for(i in 1:length(T.lst)){
   }
 }
 
+## Cross-validation with Leave-Station-Out ----
+## It is very important to take whole stations out!
+cv_st = function(rm.prec, co_loc.sp, fmP, idcol="STATION", nfold=5, pars.ranger){
+  sel.ul <- dismo::kfold(levels(rm.prec[,idcol]), k=nfold)
+  out = list(NULL)
+  for(j in 1:nfold){
+    rm.prec.s = rm.prec[which(rm.prec[,idcol] %in% levels(rm.prec[,idcol])[sel.ul==j]),]
+    rm.prec.t = rm.prec[which(rm.prec[,idcol] %in% levels(rm.prec[,idcol])[!sel.ul==j]),]
+    ## subset geographical distances
+    dnP.s = paste("layer.", which(co_locs.sp@data[,idcol] %in% levels(rm.prec[,idcol])[!sel.ul==j]), sep="", collapse="+")
+    fmP.s = as.formula(paste("PRCP ~ cdate + doy + elev_1km + PRISM_prec +", dnP.s))
+    mT.prec <- ranger(formula = fmP.s, data = rm.prec.t, mtry=length(all.vars(fmP.s))-30, min.node.size= 2, sample.fraction=0.9553763, num.trees=150, seed=1)  
+    s.prec = predict(mT.prec, rm.prec.s)
+    out[[j]] = data.frame(Observed=rm.prec.s$PRCP, Predicted=s.prec$predictions)
+  }
+  return(out)
+}
+cv.PRCP = cv_st(rm.prec, co_loc.sp, fmP, idcol="STATION", nfold=5, pars.ranger)
+cv.PRCP = do.call(rbind, cv.PRCP)
+## RMSE
+sqrt(mean((cv.PRCP$Observed - cv.PRCP$Predicted)^2, na.rm = T))
+## 0.0696
+## Results comparable to krigeST results
+## CCC
+DescTools::CCC(cv.PRCP$Observed, cv.PRCP$Predicted, ci = "z-transform", conf.level = 0.95, na.rm=TRUE)$rho.c
+## 0.925
