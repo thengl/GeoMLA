@@ -600,3 +600,95 @@ sqrt(mean((cv.PRCP$Observed - cv.PRCP$Predicted)^2, na.rm = T))
 ## CCC
 DescTools::CCC(cv.PRCP$Observed, cv.PRCP$Predicted, ci = "z-transform", conf.level = 0.95, na.rm=TRUE)$rho.c
 ## 0.925
+
+## ** Spatiotemporeal kriging ----
+library(sp)
+library(spacetime)
+library(gstat)
+co_locs.sp@data$PRISM_prec <- over(co_locs.sp, co_grids[c("elev_1km","PRISM_prec")])$PRISM_prec
+data <- co_prec[,c("STATION","DATE","PRCP", "cdate", "doy","ELEVATION"), drop=FALSE]
+str(data)
+# summary(lm(PRCP ~ ELEVATION + cosDoy + cdate, data))
+## No correlation = no grounds to use covariates
+locs.st = plyr::join(data[c("STATION","DATE","PRCP")], as.data.frame(co_locs.sp))
+sel.st = !is.na(locs.st$LONGITUDE) & !is.na(locs.st$PRCP)
+co_time <- as.POSIXct(sel.st$DATE)
+stsdf <- STIDF(SpatialPoints(locs.st[sel.st, c("LONGITUDE","LATITUDE")]), time=as.POSIXct(locs.st[sel.st,"DATE"]), data=data[sel.st,,drop=FALSE])
+## coerce to more compact st class
+stsdf <- as(stsdf, "STSDF")
+stsdf@sp@proj4string = co_grids@proj4string
+str(stsdf)
+## variogram modeling:
+empStVgm <- gstat::variogramST(PRCP~1, stsdf, tlags = 0:3)
+## takes few minutes due to the data size ...
+empStVgm$dist <- empStVgm$dist/1e3
+empStVgm$avgDist <- empStVgm$avgDist/1e3
+smmFit <- fit.StVariogram(empStVgm, vgmST("sumMetric", 
+                                    space=vgm(0.015, "Sph", 60, 0.01),
+                                    time=vgm(0.035, "Sph", 60, 0.001),
+                                    joint=vgm(0.035, "Sph", 30, 0.001),
+                                    stAni=1),
+                                    lower=c(0,0.01,0,
+                                            0,0.01,0,
+                                            0,0.01,0,
+                                            0.05),
+                                    control=list(parscale=c(1,1e3,1,
+                                      1,1e3,1,
+                                      1,1e3,1,
+                                      1)))
+## Rescale:
+smmFit$space$range <- smmFit$space$range*1e3
+smmFit$joint$range <- smmFit$joint$range*1e3
+smmFit$stAni <- smmFit$stAni*1e3
+## Predict
+T.lst = paste0("2016-02-0", c(1:6))
+sel.T = which(stsdf@endTime %in% as.POSIXct(T.lst))
+predST <- krigeST(PRCP~1, stsdf[,sel.T], STF(co_grids, time = stsdf@time[sel.T]), smmFit, nmax = 15, computeVar = TRUE)
+## takes few minutes ...
+## Export predictions:
+library(rgdal)
+for(i in 1:length(T.lst)){
+  writeGDAL(predST[,i, "var1.pred"], fname=paste0("RF_vs_kriging/results/st_prec/krigeSt_PRCP_", T.lst[i], ".tif"), options="COMPRESS=DEFLATE")
+  writeGDAL(predST[,i, "var1.var"], fname=paste0("RF_vs_kriging/results/st_prec/krigeSt_PRCP_", T.lst[i], "_pe.tif"), options="COMPRESS=DEFLATE")
+}
+
+## Plot the two next to each other:
+co_tif = raster::stack(c(paste0("RF_vs_kriging/results/st_prec/krigeSt_PRCP_2016-02-0", 2:5, ".tif"), paste0("RF_vs_kriging/results/st_prec/krigeSt_PRCP_2016-02-0", 2:5, "_pe.tif" ), paste0("RF_vs_kriging/results/st_prec/co_PRCP_2016-02-0", 1:4, ".tif" ), paste0("RF_vs_kriging/results/st_prec/co_PRCP_2016-02-0", 1:4, "_pe.tif")))
+#plot(co_tif)
+co_tif = as(co_tif, "SpatialGridDataFrame")
+## scale back to original scale
+for(i in grep(glob2rx("krigeSt_PRCP_*_pe"), names(co_tif))){ co_tif@data[,i] = sqrt(co_tif@data[,i]) }
+for(i in grep("krigeSt_", names(co_tif))){ co_tif@data[,i] = co_tif@data[,i]*100 }
+#str(co_tif@data)
+#p.ds = quantile(as.vector(co_tif@data[-grep("_pe", names(co_tif))]), probs = c(0.01,0.99), na.rm = TRUE)
+p.ds = range(as.vector(co_tif@data[-grep("_pe", names(co_tif))]))
+#p.de = quantile(as.vector(co_tif@data[grep("_pe", names(co_tif))]), probs = c(0.01,0.99), na.rm = TRUE)
+p.de = range(as.vector(as.vector(co_tif@data[grep("_pe", names(co_tif))])))
+#p.names = c(T.lst[1:4], paste0(T.lst[1:4], " (pe)"), T.lst[1:4], paste0(T.lst[1:4], " (pe)"))
+p.names = rep(T.lst[1:4], 4)
+colVec <- colorRampPalette(c("lightyellow","lightblue","blue","darkblue"))(100)
+
+pdf(file = "RF_vs_kriging/results/st_prec/Fig_st_prec_predictions.pdf", width=10, height=7)
+par(mfrow=c(2,4), oma=c(0,0,0,0), mar=c(0,0,4,0))
+for(i in grep(glob2rx("co_PRCP_2016.02.??$"), names(co_tif))){
+  plot(raster(co_tif[i]), col=colVec, zlim=p.ds, main=p.names[i], axes=FALSE, box=FALSE, legend=FALSE)
+  points(co_locs.sp, pch="+")
+}
+for(i in grep(glob2rx("krigeSt_PRCP_2016.02.??$"), names(co_tif))){
+  plot(raster(co_tif[i]), col=colVec, zlim=p.ds, main=p.names[i], axes=FALSE, box=FALSE, legend=FALSE)
+  points(co_locs.sp, pch="+")
+}
+dev.off()
+
+pdf(file = "RF_vs_kriging/results/st_prec/Fig_st_prec_predictions_pe.pdf", width=10, height=7)
+par(mfrow=c(2,4), oma=c(0,0,0,0), mar=c(0,0,4,0))
+for(i in grep(glob2rx("co_PRCP_2016.02.??_pe$"), names(co_tif))){
+  plot(raster(co_tif[i]), col=rev(bpy.colors()), zlim=p.de, main=p.names[i], axes=FALSE, box=FALSE, legend=FALSE)
+  points(co_locs.sp, pch="+")
+}
+for(i in grep(glob2rx("krigeSt_PRCP_2016.02.??_pe$"), names(co_tif))){
+  plot(raster(co_tif[i]), col=rev(bpy.colors()), zlim=p.de, main=p.names[i], axes=FALSE, box=FALSE, legend=FALSE)
+  points(co_locs.sp, pch="+")
+}
+#plot(raster(co_tif[i]), col=leg, zlim=p.de, legend.only=TRUE)
+dev.off()

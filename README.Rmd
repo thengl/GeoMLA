@@ -524,7 +524,7 @@ Further fitting of RFsp for this spacetime data follows the same framework as us
 ![figure](./RF_vs_kriging/results/st_prec/Fig_st_prec_predictions.png)
 _Figure: Spatiotemporal observations (points) and predictions of daily rainfall in mm for four day in February using the RFsp method: (above) predictions, (below) standard deviation of prediction errors estimated using the ranger package._
 
-Note from the maps above that some hot spots in the prediction error maps from previous days might propagate to other days, which indicates spatiotemporal connection between values. This shows that RFsp considers space and time in a similar way as the model-based geostatistics i.e. as a continuous space.
+Note from the maps above that some hot spots in the prediction error maps from previous days might propagate to other days, which indicates spatiotemporal connection between values. This indicates spatiotemporal connection between values in the output predictions.
 
 One disadvantage of fitting spatiotemporal models using station data is that the actual accuracy of this models need to be assessed using leave-locations-out cross-validation [@MEYER20181], otherwise ranger might give an overoptimistic estimate of the actual accuracy. This happens because RF learns also from _"location"_ so that the realistic estimate of accuracy can often be [significantly lower](https://pat-s.github.io/sperrorest/articles/spatial-modeling-use-case.html) if this issue is ignored. 
 
