@@ -49,14 +49,13 @@ library(rgdal)
 
     ## Loading required package: sp
 
-    ## rgdal: version: 1.2-16, (SVN revision 701)
+    ## rgdal: version: 1.2-7, (SVN revision 660)
     ##  Geospatial Data Abstraction Library extensions to R successfully loaded
-    ##  Loaded GDAL runtime: GDAL 2.2.2, released 2017/09/15
-    ##  Path to GDAL shared files: /usr/share/gdal/2.2
-    ##  GDAL binary built with GEOS: TRUE 
+    ##  Loaded GDAL runtime: GDAL 2.2.1, released 2017/06/23
+    ##  Path to GDAL shared files: /usr/local/share/gdal
     ##  Loaded PROJ.4 runtime: Rel. 4.9.2, 08 September 2015, [PJ_VERSION: 492]
     ##  Path to PROJ.4 shared files: (autodetected)
-    ##  Linking to sp version: 1.2-5
+    ##  Linking to sp version: 1.2-4
 
 ``` r
 library(raster)
@@ -73,18 +72,39 @@ library(geoR)
 library(ranger)
 ```
 
-    FALSE 
-    FALSE Attaching package: 'intamap'
+``` r
+library(gstat)
+library(intamap)
+```
 
-    FALSE The following object is masked from 'package:raster':
-    FALSE 
-    FALSE     interpolate
+    ## 
+    ## Attaching package: 'intamap'
 
-    FALSE plotKML version 0.5-9 (2017-05-15)
+    ## The following object is masked from 'package:raster':
+    ## 
+    ##     interpolate
 
-    FALSE URL: http://plotkml.r-forge.r-project.org/
+``` r
+library(plyr)
+library(plotKML)
+```
 
-    FALSE Loading required package: bitops
+    ## plotKML version 0.5-6 (2016-05-02)
+
+    ## URL: http://plotkml.r-forge.r-project.org/
+
+``` r
+library(scales)
+library(RCurl)
+```
+
+    ## Loading required package: bitops
+
+``` r
+library(parallel)
+library(lattice)
+library(gridExtra)
+```
 
 We also load a number of local function prepared for the purpose of this tutorial:
 
@@ -180,7 +200,7 @@ zinc.rfd <- predict(m.zinc, grid.dist0@data, type="quantiles", quantiles=quantil
 str(zinc.rfd)
 ```
 
-    ##  num [1:3103, 1:3] 257 257 257 257 257 257 257 257 269 257 ...
+    ##  num [1:3103, 1:3] 257 257 257 257 257 ...
     ##  - attr(*, "dimnames")=List of 2
     ##   ..$ : NULL
     ##   ..$ : chr [1:3] "quantile= 0.159" "quantile= 0.5" "quantile= 0.841"
@@ -348,7 +368,7 @@ m1.zinc
 
 there is a slight improvement from using only buffer distances as covariates. We can further evaluate this model to see which specific points and covariates are most important for spatial predictions:
 
-![](README_files/figure-markdown_github/RF_variableImportance-1.png)
+![](README_files/figure-markdown_github/rf-variableImportance-1.png)
 
 which shows, for example, that point 54 and 53 are two most influential points, and these are almost equally important as covariates (PC2--PC4).
 
@@ -585,9 +605,9 @@ str(pred.grids@data)
     ##  $ pred_soil1: num  0.716 0.713 0.713 0.693 0.713 ...
     ##  $ pred_soil2: num  0.246 0.256 0.256 0.27 0.256 ...
     ##  $ pred_soil3: num  0.0374 0.0307 0.0307 0.0374 0.0307 ...
-    ##  $ se_soil1  : num  0.181 0.169 0.169 0.09 0.169 ...
-    ##  $ se_soil2  : num  0.1452 0.0803 0.0803 0.0789 0.0803 ...
-    ##  $ se_soil3  : num  0.0413 0.0412 0.0412 0.0413 0.0412 ...
+    ##  $ se_soil1  : num  0.1793 0.168 0.168 0.0906 0.168 ...
+    ##  $ se_soil2  : num  0.1449 0.0801 0.0801 0.0787 0.0801 ...
+    ##  $ se_soil3  : num  0.0424 0.0423 0.0423 0.0424 0.0423 ...
 
 where `pred_soil1` is the probability of occurrence of class 1 and `se_soil1` is the standard error of prediction for the `pred_soil1` based on the Jackknife-after-Bootstrap method (Wager et al., 2014). The first column in `pred.grids` contains existing map of `soil` with hard classes only.
 
@@ -610,42 +630,9 @@ coordinates(sic.test) <- ~x+y
 pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
 ```
 
-    ## R 2018-05-07 17:30:00 interpolating 200 observations, 808 prediction locations
-
-    ## Warning in predictTime(nObs = dim(observations)[1], nPred = nPred, formulaString = formulaString, : 
-    ##  using standard model for estimating time. For better 
-    ##  platform spesific predictions, please run 
-    ##  timeModels <- generateTimeModels()
-    ##   and save the workspace
-
-    ## [1] "estimated time for  copula 72.9587814264966"
-    ## Checking object ... OK
-
-    ## Warning in ks.test(data, pnorm, mu, sigma): ties should not be present for
-    ## the Kolmogorov-Smirnov test
-
-    ## Warning in ks.test(data, pnorm, mu, sigma): ties should not be present for
-    ## the Kolmogorov-Smirnov test
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in dt((x - m)/s, df, log = TRUE): NaNs produced
-
-    ## Warning in ks.test(data, pt, params[2], params[1]): ties should not be
-    ## present for the Kolmogorov-Smirnov test
-
-    ## Warning in ks.test(data, plogis, params[1], params[2]): ties should not be
-    ## present for the Kolmogorov-Smirnov test
+    FALSE R 2018-05-15 21:45:49 interpolating 200 observations, 808 prediction locations
+    FALSE [1] "estimated time for  copula 69.2769518150389"
+    FALSE Checking object ... OK
 
 where `interpolate` is a fully automated framework for spatial predictions that selects from 5--6 state-of-the-art methods (Pebesma et al., 2011). The resulting error at validation points seems to be relatively high, which is probably due to the choice of transformation and/or variogram model:
 
@@ -690,8 +677,8 @@ m1.gamma
     ## Mtry:                             1 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       12983.42 
-    ## R squared (OOB):                  0.1270528
+    ## OOB prediction error (MSE):       13135.66 
+    ## R squared (OOB):                  0.1168168
 
 these predictions (when evaluated using the validation points) show better accuracy than obtained using the `interpolate` function:
 
@@ -701,11 +688,11 @@ ov.test <- over(sic.test, de2km["gamma_rfd1"])
 sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
 ```
 
-    ## [1] 67.17855
+    ## [1] 65.36887
 
 this number matches also the average score generated by multiple groups at the SIC 2004 (G. Dubois, 2005). So in summary, although the OOB prediction error for the model above is still relatively high, RFsp manages to produce more accurate predictions than the `interpolate` function, probably because it does better job in accounting for the local hot-spots. Note also we set `mtry=1` here on purpose low because otherwise importance of the individual 1–2 hotspots would drop significantly.
 
-![RFsp predicted gamma radiometrics with two extreme values.](README_files/figure-markdown_github/RF_SIC2004joker-1.png)
+![RFsp predicted gamma radiometrics with two extreme values.](README_files/figure-markdown_github/rf-SIC2004joker-1.png)
 
 In summary RFsp has a potential to produce maps also for variables with extereme values i.e. very skewed distributions, but this does require that some parameters of RFsp (`mtry`) are carefuly fine-tuned.
 
@@ -782,8 +769,8 @@ m.clay
     ## Mtry:                             25 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       195.8413 
-    ## R squared (OOB):                  0.2111686
+    ## OOB prediction error (MSE):       190.5888 
+    ## R squared (OOB):                  0.2293424
 
 in this case we used inverse measurement variance as `case.weights` so that points that were measured in the lab will receive much higher weights. Final output map below shows that, in this specific case, the model without weights seems to predict somewhat higher values, especially in the extrapolation areas. This indicates that using measurement errors in model calibration is important and one should not avoid specifying this in the model, especially if the training data is significantly heterogeneous.
 
@@ -799,9 +786,42 @@ geochem = readRDS("./RF_vs_kriging/data/geochem/geochem.rds")
 usa5km = readRDS("./RF_vs_kriging/data/geochem/usa5km.rds")
 ```
 
-    FALSE Converting geomap to indicators...
+``` r
+str(usa5km@data)
+```
 
-    FALSE Converting covariates to principal components...
+    ## 'data.frame':    16000 obs. of  6 variables:
+    ##  $ geomap   : Factor w/ 17 levels "6","7","8","13",..: 9 9 9 9 9 9 9 9 9 9 ...
+    ##  $ globedem : num  266 269 279 269 269 271 284 255 253 285 ...
+    ##  $ dTRI     : num  0.007 0.007 0.008 0.008 0.009 ...
+    ##  $ nlights03: num  6 5 0 5 0 1 5 13 5 5 ...
+    ##  $ dairp    : num  0.035 0.034 0.035 0.036 0.038 ...
+    ##  $ sdroads  : num  0 0 5679 0 0 ...
+
+``` r
+## negative values are in fact detection limits:
+for(i in c("PB_ICP40","CU_ICP40","K_ICP40","MG_ICP40")) { geochem[,i] = ifelse(geochem[,i] < 0, abs(geochem[,i])/2, geochem[,i])  }
+coordinates(geochem) = ~coords.x1 + coords.x2
+proj4string(geochem) = "+proj=longlat +ellps=clrk66 +towgs84=-9.0,151.0,185.0,0.0,0.0,0.0,0.0 +no_defs"
+geochem$TYPEDESC = as.factor(paste(geochem$TYPEDESC))
+summary(geochem$TYPEDESC)
+```
+
+    ##         SOIL STRM-SED-DRY STRM-SED-WET      UNKNOWN 
+    ##          362          251         2233           12
+
+``` r
+geochem = spTransform(geochem, CRS(proj4string(usa5km)))
+usa5km.spc = spc(usa5km, ~geomap+globedem+dTRI+nlights03+dairp+sdroads)
+```
+
+    ## Converting geomap to indicators...
+
+    ## Converting covariates to principal components...
+
+``` r
+ov.geochem = over(x=geochem, y=usa5km.spc@predicted)
+```
 
 we focus on mapping four chemical elements at once:
 
@@ -992,13 +1012,13 @@ rm.prec <- rm.prec[complete.cases(rm.prec[,c("PRCP","elev_1km","cdate")]),]
 
 Further fitting of RFsp for this spacetime data follows the same framework as used in all other examples previously. Based on this model, we can generate predictions through the space-time domain of interest, which typically results in producing time-series of raster maps as indicated below.
 
-![figure](./RF_vs_kriging/results/st_prec/Fig_st_prec_predictions.png) *Figure: Spatiotemporal observations (points) and predictions of daily rainfall in mm for four day in February using the RFsp method: (above) predictions, (below) standard deviation of prediction errors estimated using the ranger package.*
+![figure](./RF_vs_kriging/results/st_prec/Fig_st_prec_predictions.png) *Figure: Spatiotemporal observations (points) and predictions of daily rainfall in mm for four day in February using the RFsp and krigeST methods: (a) predictions, (b) standard deviation of prediction errors estimated using the ranger package.*
 
 Note from the maps above that some hot spots in the prediction error maps from previous days might propagate to other days, which indicates spatiotemporal connection between values. This indicates spatiotemporal connection between values in the output predictions.
 
-One disadvantage of fitting spatiotemporal models using station data is that the actual accuracy of this models need to be assessed using leave-locations-out cross-validation (Meyer, Reudenbach, Hengl, Katurji, & Nauss, 2018), otherwise ranger might give an overoptimistic estimate of the actual accuracy. This happens because RF learns also from *"location"* so that the realistic estimate of accuracy can often be [significantly lower](https://pat-s.github.io/sperrorest/articles/spatial-modeling-use-case.html) if this issue is ignored.
+One disadvantage of fitting spatiotemporal models using station data is that the actual accuracy of this models need to be assessed using leave-locations-out cross-validation (Meyer, Reudenbach, Hengl, Katurji, & Nauss, 2018), otherwise ranger might give an overoptimistic estimate of the actual accuracy. This happens because RF learns also from *"location"* so that the realistic estimate of accuracy can often be [significantly lower](https://geocompr.robinlovelace.net/spatial-cv.html#spatial-cv-with-mlr) if this issue is ignored.
 
-In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;1000 point locations (hence &gt;&gt;1000 buffer distance maps) is problably not yet recommended. Also cross-validation of accuracy of predictions produced using RFsp needs to be implemented using leave-location-out CV to account for spatial autocorrelation in data. For all other details please refer to [our paper](https://peerj.com/preprints/26693/).
+In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;1000 point locations (hence &gt;&gt;1000 buffer distance maps) is problably not yet recommended. Also cross-validation of accuracy of predictions produced using RFsp needs to be implemented using leave-location-out CV to account for spatial autocorrelation in data. The key to the success of the RFsp framework might be the training data quality — especially quality of spatial sampling (to minimize extrapolation problems and any type of bias in data), and quality of model validation (to ensure that accuracy is not effected by overfitting). For all other details please refer to [our paper](https://peerj.com/preprints/26693/).
 
 References
 ----------
