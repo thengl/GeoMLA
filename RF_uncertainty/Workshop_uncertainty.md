@@ -33,7 +33,7 @@ Software (required):
 
 -   R packages: GSIF, ranger, caret, plyr, raster, ranger (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/))
 
-R script used in this tutorial you can download from the **[github](https://github.com/thengl/PredictiveSoilMapping)**. As a gentle introduction to R programming languange and spatial classes in R we recommend [this tutorial](http://spatial.ly/2013/05/crash/).
+R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA)**. As a gentle introduction to R programming languange and spatial classes in R we recommend [this tutorial](http://spatial.ly/2013/05/crash/).
 
 Quantile regression random forest and derivation of standard errors using Jackknifing is available from ranger version &gt;0.9.4. To run this tutorial it is recommended to install [ranger](https://github.com/imbs-hl/ranger) (Wright & Ziegler, 2017) directly from github:
 
