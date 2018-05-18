@@ -35,7 +35,7 @@ Software (required):
 
 *  R packages: GSIF, ranger, caret, plyr, raster, ranger (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/))
 
-R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA)**. As a gentle introduction to R programming languange and spatial classes in R we recommend [this tutorial](http://spatial.ly/2013/05/crash/).
+R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging/R)**. As a gentle introduction to R programming languange and spatial classes in R we recommend following [the Geocomputation with R book](https://geocompr.robinlovelace.net/).
 
 Quantile regression random forest and derivation of standard errors using Jackknifing is available from ranger version >0.9.4. To run this tutorial it is recommended to install [ranger](https://github.com/imbs-hl/ranger) [@wright2017ranger] directly from github:
 
@@ -65,7 +65,7 @@ Consider for example the meuse data set from the [gstat](https://github.com/edze
 demo(meuse, echo=FALSE)
 ```
 
-We can use number of covariates to help interpolating Zinc variable. We known from the literature that concentration of metals in soil is controlled by river flooding and carrying upstream sediments (it is assumed that the main source of zinc in this case is the river that occasionally floods the area), hence we can add global surface water occurrence [@pekel2016high], the LiDAR-based digital elevation model (http://ahn.nl) and LDN land cover classes, as potential covariates explaining zinc concentration:
+We can use number of covariates to help interpolating Zinc variable. We known from the literature that concentration of metals in soil is controlled by river flooding and carrying upstream sediments (it is assumed that the main source of zinc in this case is the river that occasionally floods the area), hence we can add global surface water occurrence [@pekel2016high], the LiDAR-based digital elevation model (http://ahn.nl) and LGN (Landelijk Grondgebruiksbestand Nederland) land cover classes, as potential covariates explaining zinc concentration:
 
 ```{r, results=FALSE, tidy=TRUE}
 dir.meuse = "../RF_vs_kriging/data/meuse/"
@@ -259,7 +259,7 @@ areas that are significantly more heterogeneous and complex and that
 require, either, denser sampling networks or covariates that better
 represent local processes in these areas.
 
-So in summary uncertainty of predictions in RF models can be efficiently estimated using either the QRF or the Jacknifing approaches, both are available via the the ranger package [@wright2017ranger]. Prediction intervals should in average match the RMSE estimated using OOB samples or other Cross-validation approaches. Note however that both approaches are computationally intensive and could increase the prediction time at the order of magnitude times. There are additional costs to pay to derive a reliable and detailed measures of uncertainty.
+So in summary: uncertainty of predictions in RF models can be efficiently estimated using either the QRF (prediction intervals) or the Jacknifing approaches (confidence intervals), both are available via the the ranger package [@wright2017ranger]. Prediction intervals should in average match the RMSE estimated using OOB samples or other Cross-validation approaches. Note however that both approaches are computationally intensive and could increase the prediction time at the order of magnitude times. There are additional costs to pay to derive a reliable and detailed measures of uncertainty.
 
 ## Mapping prediction errors for factor/binomial variables:
 
@@ -317,7 +317,7 @@ m2.s1 <- ranger(fm.s1c, rm.s1, mtry=22, num.trees=500,
 m2.s1
 ```
 
-which shows that the Out of Bag prediction error (classification error) is only 0.06 (in the probability scale). Note that, it is not easy to compare the results of the regression and classification OOB errors as these are conceptually different. Also note that we turn on `keep.inbag = TRUE` so that ranger can estimate the classification errors using the Jackknife-after-Bootstrap method [@wager2014confidence]. `quantreg=TRUE` obviously would not work here since it is a classification and not a regression problem.
+which shows that the Out of Bag prediction error (classification error) is only 0.06 (this number is in the probability scale). Note that, it is not easy to compare the results of the regression and classification OOB errors as these are conceptually different. Also note that we turn on `keep.inbag = TRUE` so that ranger can estimate the classification errors using the Jackknife-after-Bootstrap method [@wager2014confidence]. `quantreg=TRUE` obviously would not work here since it is a classification and not a regression problem.
 
 We next derive prediction errors for the two options:
 

@@ -33,7 +33,7 @@ Software (required):
 
 -   R packages: GSIF, ranger, caret, plyr, raster, ranger (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/))
 
-R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA)**. As a gentle introduction to R programming languange and spatial classes in R we recommend [this tutorial](http://spatial.ly/2013/05/crash/).
+R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging/R)**. As a gentle introduction to R programming languange and spatial classes in R we recommend following [the Geocomputation with R book](https://geocompr.robinlovelace.net/).
 
 Quantile regression random forest and derivation of standard errors using Jackknifing is available from ranger version &gt;0.9.4. To run this tutorial it is recommended to install [ranger](https://github.com/imbs-hl/ranger) (Wright & Ziegler, 2017) directly from github:
 
@@ -84,7 +84,7 @@ Consider for example the meuse data set from the [gstat](https://github.com/edze
 demo(meuse, echo=FALSE)
 ```
 
-We can use number of covariates to help interpolating Zinc variable. We known from the literature that concentration of metals in soil is controlled by river flooding and carrying upstream sediments (it is assumed that the main source of zinc in this case is the river that occasionally floods the area), hence we can add global surface water occurrence (Pekel, Cottam, Gorelick, & Belward, 2016), the LiDAR-based digital elevation model (<http://ahn.nl>) and LDN land cover classes, as potential covariates explaining zinc concentration:
+We can use number of covariates to help interpolating Zinc variable. We known from the literature that concentration of metals in soil is controlled by river flooding and carrying upstream sediments (it is assumed that the main source of zinc in this case is the river that occasionally floods the area), hence we can add global surface water occurrence (Pekel, Cottam, Gorelick, & Belward, 2016), the LiDAR-based digital elevation model (<http://ahn.nl>) and LGN (Landelijk Grondgebruiksbestand Nederland) land cover classes, as potential covariates explaining zinc concentration:
 
 ``` r
 dir.meuse = "../RF_vs_kriging/data/meuse/"
@@ -209,7 +209,7 @@ str(pred.zinc.rfq)
     ##  $ treetype                 : chr "Regression"
     ##  $ num.independent.variables: num 171
     ##  $ num.trees                : num 500
-    ##  $ predictions              : num [1:3103, 1:3] 612 612 287 281 406 ...
+    ##  $ predictions              : num [1:3103, 1:3] 640 622 375 323 553 ...
     ##   ..- attr(*, "dimnames")=List of 2
     ##   .. ..$ : NULL
     ##   .. ..$ : chr [1:3] "quantile= 0.159" "quantile= 0.5" "quantile= 0.841"
@@ -222,7 +222,7 @@ pred.zinc.rfq$predictions[1,]
 ```
 
     ## quantile= 0.159   quantile= 0.5 quantile= 0.841 
-    ##             612            1022            1096
+    ##             640            1022            1096
 
 which shows that the prediction range is relatively wide (note also that the upper and lower prediction intervals are not necessarily symetric!). We can copy the predicted lower and upper intervals to the spatial object so we can also plot values as maps (maps of predictions can be found in this [tutorial](https://github.com/thengl/GeoMLA)):
 
@@ -241,7 +241,7 @@ Compare this numbers with the OOB RMSE and mean s.d. of prediction error:
 mean(meuse.grid$zinc_rfq_r, na.rm=TRUE); sqrt(m1.zinc$prediction.error)
 ```
 
-    ## [1] 165.3163
+    ## [1] 166.0883
 
     ## [1] 216.6955
 
@@ -266,7 +266,7 @@ str(pred.zinc.rfj)
     ##  $ num.independent.variables: num 171
     ##  $ num.samples              : int 3103
     ##  $ treetype                 : chr "Regression"
-    ##  $ se                       : num [1:3103] 13.6 13.6 13.9 12.9 12.9 ...
+    ##  $ se                       : num [1:3103] 13.5 13.5 13.8 12.8 12.8 ...
     ##  - attr(*, "class")= chr "ranger.prediction"
 
 which adds one extra column called `se` i.e. standard errors. If you compare OOB RMSE and mean s.d. of prediction error you will notice that the `se` values are significantly smaller:
@@ -275,7 +275,7 @@ which adds one extra column called `se` i.e. standard errors. If you compare OOB
 mean(pred.zinc.rfj$se, na.rm=TRUE); sqrt(m2.zinc$prediction.error)
 ```
 
-    ## [1] 33.44181
+    ## [1] 33.35022
 
     ## [1] 216.6955
 
@@ -449,8 +449,8 @@ str(swiss1km@data)
     ##  $ CHELSA_rainfall  : int  84 73 70 69 79 99 105 94 92 83 ...
     ##  $ DEM              : num  401 406 395 395 397 ...
     ##  $ border           : chr  "Switzerland" "Switzerland" "Switzerland" "Switzerland" ...
-    ##  $ rainfall_rfd1    : num  127 127 127 127 127 131 126 126 126 126 ...
-    ##  $ rainfall_rfd1_var: num  14.5 14.5 14.5 14.5 14.5 ...
+    ##  $ rainfall_rfd1    : num  127 127 127 127 127 127 126 126 126 126 ...
+    ##  $ rainfall_rfd1_var: num  12 12 13 12.7 11.7 ...
 
 this finally gives:
 
@@ -458,7 +458,7 @@ this finally gives:
 
 the map on the right shows that there are specific zones where the uncertainty is particulary high. This indicates that the RFsp prediction error maps are potentially more informative than the geostatistical error maps (e.g. UK variance map): it can be used to depict local areas that are significantly more heterogeneous and complex and that require, either, denser sampling networks or covariates that better represent local processes in these areas.
 
-So in summary uncertainty of predictions in RF models can be efficiently estimated using either the QRF or the Jacknifing approaches, both are available via the the ranger package (Wright & Ziegler, 2017). Prediction intervals should in average match the RMSE estimated using OOB samples or other Cross-validation approaches. Note however that both approaches are computationally intensive and could increase the prediction time at the order of magnitude times. There are additional costs to pay to derive a reliable and detailed measures of uncertainty.
+So in summary: uncertainty of predictions in RF models can be efficiently estimated using either the QRF (prediction intervals) or the Jacknifing approaches (confidence intervals), both are available via the the ranger package (Wright & Ziegler, 2017). Prediction intervals should in average match the RMSE estimated using OOB samples or other Cross-validation approaches. Note however that both approaches are computationally intensive and could increase the prediction time at the order of magnitude times. There are additional costs to pay to derive a reliable and detailed measures of uncertainty.
 
 Mapping prediction errors for factor/binomial variables:
 --------------------------------------------------------
@@ -588,7 +588,7 @@ m2.s1
     ## Variable importance mode:         none 
     ## OOB prediction error:             0.05711483
 
-which shows that the Out of Bag prediction error (classification error) is only 0.06 (in the probability scale). Note that, it is not easy to compare the results of the regression and classification OOB errors as these are conceptually different. Also note that we turn on `keep.inbag = TRUE` so that ranger can estimate the classification errors using the Jackknife-after-Bootstrap method (Wager et al., 2014). `quantreg=TRUE` obviously would not work here since it is a classification and not a regression problem.
+which shows that the Out of Bag prediction error (classification error) is only 0.06 (this number is in the probability scale). Note that, it is not easy to compare the results of the regression and classification OOB errors as these are conceptually different. Also note that we turn on `keep.inbag = TRUE` so that ranger can estimate the classification errors using the Jackknife-after-Bootstrap method (Wager et al., 2014). `quantreg=TRUE` obviously would not work here since it is a classification and not a regression problem.
 
 We next derive prediction errors for the two options:
 
@@ -620,7 +620,7 @@ meuse.grid$soil1_rfq_r = (meuse.grid$soil1_rfq_U - meuse.grid$soil1_rfq_L)/2
 mean(meuse.grid$soil1_rfq_r, na.rm=TRUE); sqrt(m1.s1$prediction.error)
 ```
 
-    ## [1] 0.1233592
+    ## [1] 0.1205723
 
     ## [1] 0.2381989
 
@@ -732,9 +732,9 @@ str(pred.grids@data)
     ##  $ pred_soil1: num  0.757 0.759 0.753 0.74 0.765 ...
     ##  $ pred_soil2: num  0.212 0.218 0.22 0.229 0.212 ...
     ##  $ pred_soil3: num  0.0307 0.0232 0.0272 0.0307 0.0232 ...
-    ##  $ se_soil1  : num  0.0999 0.1089 0.1057 0.0935 0.0714 ...
-    ##  $ se_soil2  : num  0.0805 0.0837 0.0821 0.0803 0.0677 ...
-    ##  $ se_soil3  : num  0.0349 0.0347 0.0349 0.0349 0.0347 ...
+    ##  $ se_soil1  : num  0.1 0.109 0.1058 0.0936 0.0715 ...
+    ##  $ se_soil2  : num  0.0829 0.0868 0.0849 0.0827 0.0667 ...
+    ##  $ se_soil3  : num  0.035 0.0348 0.035 0.035 0.0348 ...
 
 which gives 6 columns in total: 3 columns for predictions and 3 columns for prediction errors `se`. We can plot the three maps next to each other by using:
 
