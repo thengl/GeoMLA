@@ -33,9 +33,11 @@ Software (required):
 
 *  [RStudio](http://www.rstudio.com/products/RStudio/);
 
-*  R packages: GSIF, ranger, caret, plyr, raster, ranger (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/))
+*  R packages: GSIF, ranger, caret, plyr, raster, ranger (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/));
 
-R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging/R)**. As a gentle introduction to R programming languange and spatial classes in R we recommend following [the Geocomputation with R book](https://geocompr.robinlovelace.net/).
+* [QGIS](https://www.qgis.org/en/site/forusers/download.html) to visualize predictions (add [WMTS](http://gis.sinica.edu.tw/worldmap/wmts) background layers);
+
+R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging/R)**. As a gentle introduction to R programming languange and spatial classes in R we recommend following [the Geocomputation with R book](https://geocompr.robinlovelace.net/). To open any spatial layers in QGIS you will need to use rgdal function `writeGDAL` for rasters or `writeOGR` for vector layers.
 
 Quantile regression random forest and derivation of standard errors using Jackknifing is available from ranger version >0.9.4. To run this tutorial it is recommended to install [ranger](https://github.com/imbs-hl/ranger) [@wright2017ranger] directly from github:
 
@@ -240,6 +242,13 @@ swiss1km$rainfall_rfd1_var = (rain.rfd1[,3]-rain.rfd1[,1])/2
 str(swiss1km@data)
 ```
 
+```{r, eval=FALSE, include=FALSE}
+library(rgdal)
+writeOGR(sic97.sp["rainfall"], dsn = "../RF_vs_kriging/results/rainfall/rainfall_sic97.shp", "rainfall_sic97", "ESRI Shapefile")
+writeGDAL(swiss1km["rainfall_rfd1"], fname = "../RF_vs_kriging/results/rainfall/pred_rainfall_RFsp.tif", options = c("COMPRESS=DEFLATE"))
+writeGDAL(swiss1km["rainfall_rfd1_var"], fname = "../RF_vs_kriging/results/rainfall/pred.var_rainfall_RFsp.tif", options = c("COMPRESS=DEFLATE"))
+```
+
 this finally gives:
 
 ```{r qrf-sic97-maps, echo=FALSE, fig.width=9, fig.cap="Predictions and prediction errors for the SIC97 data set."}
@@ -258,6 +267,9 @@ informative than the geostatistical error maps (e.g. UK variance map): it can be
 areas that are significantly more heterogeneous and complex and that
 require, either, denser sampling networks or covariates that better
 represent local processes in these areas.
+
+![figure](../RF_vs_kriging/img/sic97_rainfall_qgis.jpg)
+_Figure: SIC97 data set predictions based on RFsp visualized in QGIS._
 
 So in summary: uncertainty of predictions in RF models can be efficiently estimated using either the QRF (prediction intervals) or the Jacknifing approaches (confidence intervals), both are available via the the ranger package [@wright2017ranger]. Prediction intervals should in average match the RMSE estimated using OOB samples or other Cross-validation approaches. Note however that both approaches are computationally intensive and could increase the prediction time at the order of magnitude times. There are additional costs to pay to derive a reliable and detailed measures of uncertainty.
 
@@ -480,7 +492,7 @@ of the distribution of the target variable at prediction points. Thus,
 the 0.025 and 0.975 quantile may be used to derive the lower and upper
 limits of a symmetric prediction interval.
 
-In summary, spatial prediction of uncertainty for numeric, binomial and factor-type variables is straight forward with ranger: buffer distance and spatial-autocorrelation can be incorporated at once. Compare with geostatistical packages where GLMs with logit link function and/or indicator kriging would need to be used, and which requires that variograms are fitted per class. 
+In summary: spatial prediction of uncertainty for numeric, binomial and factor-type variables is straight forward with ranger: buffer distance and spatial-autocorrelation can be incorporated at once. Compare with geostatistical packages where GLMs with logit link function and/or indicator kriging would need to be used, and which requires that variograms are fitted per class. 
 
 The QRF and Jacknifing approaches give about similar predictions of the uncertainty (similar patterns) but refer to different scales. The QRF approach seems to be somewhat more attractive as it can be used to produce whole distributions of prediction errors (by setting the `quantiles` argument). One should also be careful about the difference between estimating median and mean values (they can often be different!). Also, both the QRF and the Jacknifing approaches can be computational and increase the computational load by order of mangitude, hence plan carefully your analysis and prediction with larger data sets.
 

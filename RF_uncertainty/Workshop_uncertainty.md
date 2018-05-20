@@ -31,9 +31,11 @@ Software (required):
 
 -   [RStudio](http://www.rstudio.com/products/RStudio/);
 
--   R packages: GSIF, ranger, caret, plyr, raster, ranger (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/))
+-   R packages: GSIF, ranger, caret, plyr, raster, ranger (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/));
 
-R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging/R)**. As a gentle introduction to R programming languange and spatial classes in R we recommend following [the Geocomputation with R book](https://geocompr.robinlovelace.net/).
+-   [QGIS](https://www.qgis.org/en/site/forusers/download.html) to visualize predictions (add [WMTS](http://gis.sinica.edu.tw/worldmap/wmts) background layers);
+
+R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging/R)**. As a gentle introduction to R programming languange and spatial classes in R we recommend following [the Geocomputation with R book](https://geocompr.robinlovelace.net/). To open any spatial layers in QGIS you will need to use rgdal function `writeGDAL` for rasters or `writeOGR` for vector layers.
 
 Quantile regression random forest and derivation of standard errors using Jackknifing is available from ranger version &gt;0.9.4. To run this tutorial it is recommended to install [ranger](https://github.com/imbs-hl/ranger) (Wright & Ziegler, 2017) directly from github:
 
@@ -209,7 +211,7 @@ str(pred.zinc.rfq)
     ##  $ treetype                 : chr "Regression"
     ##  $ num.independent.variables: num 171
     ##  $ num.trees                : num 500
-    ##  $ predictions              : num [1:3103, 1:3] 640 622 375 323 553 ...
+    ##  $ predictions              : num [1:3103, 1:3] 622 612 346 343 474 ...
     ##   ..- attr(*, "dimnames")=List of 2
     ##   .. ..$ : NULL
     ##   .. ..$ : chr [1:3] "quantile= 0.159" "quantile= 0.5" "quantile= 0.841"
@@ -222,7 +224,7 @@ pred.zinc.rfq$predictions[1,]
 ```
 
     ## quantile= 0.159   quantile= 0.5 quantile= 0.841 
-    ##             640            1022            1096
+    ##         621.548        1022.000        1096.000
 
 which shows that the prediction range is relatively wide (note also that the upper and lower prediction intervals are not necessarily symetric!). We can copy the predicted lower and upper intervals to the spatial object so we can also plot values as maps (maps of predictions can be found in this [tutorial](https://github.com/thengl/GeoMLA)):
 
@@ -241,7 +243,7 @@ Compare this numbers with the OOB RMSE and mean s.d. of prediction error:
 mean(meuse.grid$zinc_rfq_r, na.rm=TRUE); sqrt(m1.zinc$prediction.error)
 ```
 
-    ## [1] 166.0883
+    ## [1] 166.0621
 
     ## [1] 216.6955
 
@@ -266,7 +268,7 @@ str(pred.zinc.rfj)
     ##  $ num.independent.variables: num 171
     ##  $ num.samples              : int 3103
     ##  $ treetype                 : chr "Regression"
-    ##  $ se                       : num [1:3103] 13.5 13.5 13.8 12.8 12.8 ...
+    ##  $ se                       : num [1:3103] 13.7 13.7 14 13 13 ...
     ##  - attr(*, "class")= chr "ranger.prediction"
 
 which adds one extra column called `se` i.e. standard errors. If you compare OOB RMSE and mean s.d. of prediction error you will notice that the `se` values are significantly smaller:
@@ -275,7 +277,7 @@ which adds one extra column called `se` i.e. standard errors. If you compare OOB
 mean(pred.zinc.rfj$se, na.rm=TRUE); sqrt(m2.zinc$prediction.error)
 ```
 
-    ## [1] 33.35022
+    ## [1] 33.51842
 
     ## [1] 216.6955
 
@@ -449,14 +451,16 @@ str(swiss1km@data)
     ##  $ CHELSA_rainfall  : int  84 73 70 69 79 99 105 94 92 83 ...
     ##  $ DEM              : num  401 406 395 395 397 ...
     ##  $ border           : chr  "Switzerland" "Switzerland" "Switzerland" "Switzerland" ...
-    ##  $ rainfall_rfd1    : num  127 127 127 127 127 127 126 126 126 126 ...
-    ##  $ rainfall_rfd1_var: num  12 12 13 12.7 11.7 ...
+    ##  $ rainfall_rfd1    : num  129 127 127 127 127 131 126 126 126 126 ...
+    ##  $ rainfall_rfd1_var: num  11.7 11.7 13.3 12.2 11.5 ...
 
 this finally gives:
 
 ![Predictions and prediction errors for the SIC97 data set.](Workshop_uncertainty_files/figure-markdown_github/qrf-sic97-maps-1.png)
 
 the map on the right shows that there are specific zones where the uncertainty is particulary high. This indicates that the RFsp prediction error maps are potentially more informative than the geostatistical error maps (e.g. UK variance map): it can be used to depict local areas that are significantly more heterogeneous and complex and that require, either, denser sampling networks or covariates that better represent local processes in these areas.
+
+![figure](../RF_vs_kriging/img/sic97_rainfall_qgis.jpg) *Figure: SIC97 data set predictions based on RFsp visualized in QGIS.*
 
 So in summary: uncertainty of predictions in RF models can be efficiently estimated using either the QRF (prediction intervals) or the Jacknifing approaches (confidence intervals), both are available via the the ranger package (Wright & Ziegler, 2017). Prediction intervals should in average match the RMSE estimated using OOB samples or other Cross-validation approaches. Note however that both approaches are computationally intensive and could increase the prediction time at the order of magnitude times. There are additional costs to pay to derive a reliable and detailed measures of uncertainty.
 
@@ -620,7 +624,7 @@ meuse.grid$soil1_rfq_r = (meuse.grid$soil1_rfq_U - meuse.grid$soil1_rfq_L)/2
 mean(meuse.grid$soil1_rfq_r, na.rm=TRUE); sqrt(m1.s1$prediction.error)
 ```
 
-    ## [1] 0.1205723
+    ## [1] 0.1240549
 
     ## [1] 0.2381989
 
@@ -732,9 +736,9 @@ str(pred.grids@data)
     ##  $ pred_soil1: num  0.757 0.759 0.753 0.74 0.765 ...
     ##  $ pred_soil2: num  0.212 0.218 0.22 0.229 0.212 ...
     ##  $ pred_soil3: num  0.0307 0.0232 0.0272 0.0307 0.0232 ...
-    ##  $ se_soil1  : num  0.1 0.109 0.1058 0.0936 0.0715 ...
-    ##  $ se_soil2  : num  0.0829 0.0868 0.0849 0.0827 0.0667 ...
-    ##  $ se_soil3  : num  0.035 0.0348 0.035 0.035 0.0348 ...
+    ##  $ se_soil1  : num  0.1004 0.1093 0.1061 0.0939 0.072 ...
+    ##  $ se_soil2  : num  0.0789 0.0816 0.0803 0.0788 0.0686 ...
+    ##  $ se_soil3  : num  0.0329 0.0327 0.0329 0.0329 0.0327 ...
 
 which gives 6 columns in total: 3 columns for predictions and 3 columns for prediction errors `se`. We can plot the three maps next to each other by using:
 
@@ -757,7 +761,7 @@ The uncertainty of the predictions of random forest for regression-type problems
 
 The approaches by Wager et al. (2014) and Mentch & Hooker (2016) estimate standard errors of the expected values of predictions, used to construct confidence intervals, while the approaches of Coulston et al. (2016) and Meinshausen (2006) estimate prediction intervals. The Quantile Regression Forests (QRF) algorithm estimates the quantiles of the distribution of the target variable at prediction points. Thus, the 0.025 and 0.975 quantile may be used to derive the lower and upper limits of a symmetric prediction interval.
 
-In summary, spatial prediction of uncertainty for numeric, binomial and factor-type variables is straight forward with ranger: buffer distance and spatial-autocorrelation can be incorporated at once. Compare with geostatistical packages where GLMs with logit link function and/or indicator kriging would need to be used, and which requires that variograms are fitted per class.
+In summary: spatial prediction of uncertainty for numeric, binomial and factor-type variables is straight forward with ranger: buffer distance and spatial-autocorrelation can be incorporated at once. Compare with geostatistical packages where GLMs with logit link function and/or indicator kriging would need to be used, and which requires that variograms are fitted per class.
 
 The QRF and Jacknifing approaches give about similar predictions of the uncertainty (similar patterns) but refer to different scales. The QRF approach seems to be somewhat more attractive as it can be used to produce whole distributions of prediction errors (by setting the `quantiles` argument). One should also be careful about the difference between estimating median and mean values (they can often be different!). Also, both the QRF and the Jacknifing approaches can be computational and increase the computational load by order of mangitude, hence plan carefully your analysis and prediction with larger data sets.
 
