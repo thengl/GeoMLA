@@ -33,7 +33,7 @@ Software (required):
 
 *  [RStudio](http://www.rstudio.com/products/RStudio/);
 
-*  R packages: GSIF, ranger, caret, plyr, raster, ranger (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/));
+*  R packages: GSIF, plotKML, ranger, caret, plyr, raster, devtools (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/));
 
 * [QGIS](https://www.qgis.org/en/site/forusers/download.html) to visualize predictions (add [WMTS](http://gis.sinica.edu.tw/worldmap/wmts) background layers);
 

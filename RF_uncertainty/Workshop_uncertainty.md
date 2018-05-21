@@ -31,7 +31,7 @@ Software (required):
 
 -   [RStudio](http://www.rstudio.com/products/RStudio/);
 
--   R packages: GSIF, ranger, caret, plyr, raster, ranger (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/));
+-   R packages: GSIF, plotKML, ranger, caret, plyr, raster, devtools (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/));
 
 -   [QGIS](https://www.qgis.org/en/site/forusers/download.html) to visualize predictions (add [WMTS](http://gis.sinica.edu.tw/worldmap/wmts) background layers);
 
@@ -211,7 +211,7 @@ str(pred.zinc.rfq)
     ##  $ treetype                 : chr "Regression"
     ##  $ num.independent.variables: num 171
     ##  $ num.trees                : num 500
-    ##  $ predictions              : num [1:3103, 1:3] 622 612 346 343 474 ...
+    ##  $ predictions              : num [1:3103, 1:3] 640 640 346 335 474 ...
     ##   ..- attr(*, "dimnames")=List of 2
     ##   .. ..$ : NULL
     ##   .. ..$ : chr [1:3] "quantile= 0.159" "quantile= 0.5" "quantile= 0.841"
@@ -224,7 +224,7 @@ pred.zinc.rfq$predictions[1,]
 ```
 
     ## quantile= 0.159   quantile= 0.5 quantile= 0.841 
-    ##         621.548        1022.000        1096.000
+    ##             640            1022            1096
 
 which shows that the prediction range is relatively wide (note also that the upper and lower prediction intervals are not necessarily symetric!). We can copy the predicted lower and upper intervals to the spatial object so we can also plot values as maps (maps of predictions can be found in this [tutorial](https://github.com/thengl/GeoMLA)):
 
@@ -243,7 +243,7 @@ Compare this numbers with the OOB RMSE and mean s.d. of prediction error:
 mean(meuse.grid$zinc_rfq_r, na.rm=TRUE); sqrt(m1.zinc$prediction.error)
 ```
 
-    ## [1] 166.0621
+    ## [1] 167.8069
 
     ## [1] 216.6955
 
@@ -268,7 +268,7 @@ str(pred.zinc.rfj)
     ##  $ num.independent.variables: num 171
     ##  $ num.samples              : int 3103
     ##  $ treetype                 : chr "Regression"
-    ##  $ se                       : num [1:3103] 13.7 13.7 14 13 13 ...
+    ##  $ se                       : num [1:3103] 13.7 13.6 13.9 13 13 ...
     ##  - attr(*, "class")= chr "ranger.prediction"
 
 which adds one extra column called `se` i.e. standard errors. If you compare OOB RMSE and mean s.d. of prediction error you will notice that the `se` values are significantly smaller:
@@ -277,7 +277,7 @@ which adds one extra column called `se` i.e. standard errors. If you compare OOB
 mean(pred.zinc.rfj$se, na.rm=TRUE); sqrt(m2.zinc$prediction.error)
 ```
 
-    ## [1] 33.51842
+    ## [1] 33.49803
 
     ## [1] 216.6955
 
@@ -451,8 +451,8 @@ str(swiss1km@data)
     ##  $ CHELSA_rainfall  : int  84 73 70 69 79 99 105 94 92 83 ...
     ##  $ DEM              : num  401 406 395 395 397 ...
     ##  $ border           : chr  "Switzerland" "Switzerland" "Switzerland" "Switzerland" ...
-    ##  $ rainfall_rfd1    : num  129 127 127 127 127 131 126 126 126 126 ...
-    ##  $ rainfall_rfd1_var: num  11.7 11.7 13.3 12.2 11.5 ...
+    ##  $ rainfall_rfd1    : num  127 127 127 127 127 ...
+    ##  $ rainfall_rfd1_var: num  12.2 12 13 12.7 12 ...
 
 this finally gives:
 
@@ -624,7 +624,7 @@ meuse.grid$soil1_rfq_r = (meuse.grid$soil1_rfq_U - meuse.grid$soil1_rfq_L)/2
 mean(meuse.grid$soil1_rfq_r, na.rm=TRUE); sqrt(m1.s1$prediction.error)
 ```
 
-    ## [1] 0.1240549
+    ## [1] 0.1183677
 
     ## [1] 0.2381989
 
@@ -736,9 +736,9 @@ str(pred.grids@data)
     ##  $ pred_soil1: num  0.757 0.759 0.753 0.74 0.765 ...
     ##  $ pred_soil2: num  0.212 0.218 0.22 0.229 0.212 ...
     ##  $ pred_soil3: num  0.0307 0.0232 0.0272 0.0307 0.0232 ...
-    ##  $ se_soil1  : num  0.1004 0.1093 0.1061 0.0939 0.072 ...
-    ##  $ se_soil2  : num  0.0789 0.0816 0.0803 0.0788 0.0686 ...
-    ##  $ se_soil3  : num  0.0329 0.0327 0.0329 0.0329 0.0327 ...
+    ##  $ se_soil1  : num  0.1008 0.1097 0.1065 0.0944 0.0726 ...
+    ##  $ se_soil2  : num  0.0822 0.0859 0.0841 0.082 0.067 ...
+    ##  $ se_soil3  : num  0.0353 0.0351 0.0352 0.0353 0.0351 ...
 
 which gives 6 columns in total: 3 columns for predictions and 3 columns for prediction errors `se`. We can plot the three maps next to each other by using:
 
