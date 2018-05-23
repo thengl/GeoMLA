@@ -59,7 +59,7 @@ leg = c("#0000ff", "#0028d7", "#0050af", "#007986", "#00a15e", "#00ca35",
         "#e5ff00", "#fff200", "#ffca00", "#ffa100", "#ff7900", "#ff5000", "#ff2800", "#ff0000")
 ```
 
-## Mapping uncertainty using numeric variables and the ranger package:
+## Mapping uncertainty using numeric variables and the ranger package
 
 Consider for example the meuse data set from the [gstat](https://github.com/edzer/gstat) package:
 
@@ -273,7 +273,7 @@ _Figure: SIC97 data set predictions based on RFsp visualized in QGIS._
 
 So in summary: uncertainty of predictions in RF models can be efficiently estimated using either the QRF (prediction intervals) or the Jacknifing approaches (confidence intervals), both are available via the the ranger package [@wright2017ranger]. Prediction intervals should in average match the RMSE estimated using OOB samples or other Cross-validation approaches. Note however that both approaches are computationally intensive and could increase the prediction time at the order of magnitude times. There are additional costs to pay to derive a reliable and detailed measures of uncertainty.
 
-## Mapping prediction errors for factor/binomial variables:
+## Mapping prediction errors for factor/binomial variables
 
 In the next example we look at mapping the uncertainty of predictions of factor/binomial variables. Consider for example the soil type classes in the Meuse data set:
 
@@ -398,7 +398,7 @@ points(meuse, pch="+")
 
 Again both approaches to estimating mapping uncertainty give similar patterns: basically transition zones between class 1 and other soil types are most uncertain. Note however that the QRF estimate of the uncertainty (maps on the left) shows much more distinct jumps in values.
 
-## Mapping prediction errors for a factor variable:
+## Mapping prediction errors for a factor variable
 
 In the last example we look at how to map uncertainty of predicting factor-type variable:
 
