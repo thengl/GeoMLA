@@ -3,6 +3,7 @@ RFsp — Random Forest for spatial data (R tutorial)
 Hengl, T., Nussbaum, M., and Wright, M.N.
 
 -   [Installing and loading packages](#installing-and-loading-packages)
+-   [Data sets in use](#data-sets-in-use)
 -   [Spatial prediction 2D continuous variable using buffer distances](#spatial-prediction-2d-continuous-variable-using-buffer-distances)
 -   [Spatial prediction 2D variable with covariates](#spatial-prediction-2d-variable-with-covariates)
 -   [Spatial prediction of binomial variable](#spatial-prediction-of-binomial-variable)
@@ -49,13 +50,14 @@ library(rgdal)
 
     ## Loading required package: sp
 
-    ## rgdal: version: 1.2-7, (SVN revision 660)
+    ## rgdal: version: 1.3-3, (SVN revision (unknown))
     ##  Geospatial Data Abstraction Library extensions to R successfully loaded
-    ##  Loaded GDAL runtime: GDAL 2.2.1, released 2017/06/23
+    ##  Loaded GDAL runtime: GDAL 2.3.1, released 2018/06/22
     ##  Path to GDAL shared files: /usr/local/share/gdal
+    ##  GDAL binary built with GEOS: TRUE 
     ##  Loaded PROJ.4 runtime: Rel. 4.9.2, 08 September 2015, [PJ_VERSION: 492]
     ##  Path to PROJ.4 shared files: (autodetected)
-    ##  Linking to sp version: 1.2-4
+    ##  Linking to sp version: 1.2-5
 
 ``` r
 library(raster)
@@ -89,7 +91,7 @@ library(plyr)
 library(plotKML)
 ```
 
-    ## plotKML version 0.5-6 (2016-05-02)
+    ## plotKML version 0.5-9 (2017-05-15)
 
     ## URL: http://plotkml.r-forge.r-project.org/
 
@@ -111,6 +113,18 @@ We also load a number of local function prepared for the purpose of this tutoria
 ``` r
 source('./RF_vs_kriging/R/RFsp_functions.R')
 ```
+
+Data sets in use
+----------------
+
+This tutorial uses several data sets that are either available from the R packages listed or can be loaded from the `/RF_vs_kriging/data` directory. This is the complete list of data sets used in the tutorial and the scientific paper:
+
+-   Muse data set (sp package): topsoil heavy metal concentrations, along with a number of soil and landscape variables at 155 observation locations;
+-   Swiss rainfall dataset SIC 1997 (G Dubois, Malczewski, & De Cort, 2003) (see folder `./RF_vs_kriging/data/rainfall`): 467 measurements of daily rainfall in Switzerland on the 8th of May 1986;
+-   Ebergötzen data set (plotKML package): 3670 ground observations of soil types and texture by hand,
+-   National Cooperative Soil Survey (NCSS) data set for a sub-area around Carson (see folder `./RF_vs_kriging/data/NRCS`): contains 3418 measurements of clay content in soil;
+-   The National Geochemical Survey data set (see folder `./RF_vs_kriging/data/geochem`): 2858 points with measurements of Pb, Cu, K and Mg covering the US states Illinois and Indiana;
+-   Boulder Colorado daily precipitation (see folder `./RF_vs_kriging/data/st_prec`): 176,467 measurements of daily precipitation for the period 20142017,
 
 Spatial prediction 2D continuous variable using buffer distances
 ----------------------------------------------------------------
@@ -605,9 +619,9 @@ str(pred.grids@data)
     ##  $ pred_soil1: num  0.716 0.713 0.713 0.693 0.713 ...
     ##  $ pred_soil2: num  0.246 0.256 0.256 0.27 0.256 ...
     ##  $ pred_soil3: num  0.0374 0.0307 0.0307 0.0374 0.0307 ...
-    ##  $ se_soil1  : num  0.1793 0.168 0.168 0.0906 0.168 ...
-    ##  $ se_soil2  : num  0.1449 0.0801 0.0801 0.0787 0.0801 ...
-    ##  $ se_soil3  : num  0.0424 0.0423 0.0423 0.0424 0.0423 ...
+    ##  $ se_soil1  : num  0.181 0.1695 0.1695 0.0895 0.1695 ...
+    ##  $ se_soil2  : num  0.1435 0.081 0.081 0.0798 0.081 ...
+    ##  $ se_soil3  : num  0.0393 0.0392 0.0392 0.0393 0.0392 ...
 
 where `pred_soil1` is the probability of occurrence of class 1 and `se_soil1` is the standard error of prediction for the `pred_soil1` based on the Jackknife-after-Bootstrap method (Wager et al., 2014). The first column in `pred.grids` contains existing map of `soil` with hard classes only.
 
@@ -630,8 +644,8 @@ coordinates(sic.test) <- ~x+y
 pred.sic2004 <- interpolate(sic.val, sic.test, maximumTime = 90)
 ```
 
-    FALSE R 2018-05-15 21:45:49 interpolating 200 observations, 808 prediction locations
-    FALSE [1] "estimated time for  copula 69.2769518150389"
+    FALSE R 2018-07-24 10:48:31 interpolating 200 observations, 808 prediction locations
+    FALSE [1] "estimated time for  copula 71.6110222693811"
     FALSE Checking object ... OK
 
 where `interpolate` is a fully automated framework for spatial predictions that selects from 5--6 state-of-the-art methods (Pebesma et al., 2011). The resulting error at validation points seems to be relatively high, which is probably due to the choice of transformation and/or variogram model:
@@ -677,8 +691,8 @@ m1.gamma
     ## Mtry:                             1 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       13135.66 
-    ## R squared (OOB):                  0.1168168
+    ## OOB prediction error (MSE):       13139.21 
+    ## R squared (OOB):                  0.1165779
 
 these predictions (when evaluated using the validation points) show better accuracy than obtained using the `interpolate` function:
 
@@ -688,7 +702,7 @@ ov.test <- over(sic.test, de2km["gamma_rfd1"])
 sd(sic.test$joker-ov.test$gamma_rfd1, na.rm=TRUE)
 ```
 
-    ## [1] 65.36887
+    ## [1] 66.92076
 
 this number matches also the average score generated by multiple groups at the SIC 2004 (G. Dubois, 2005). So in summary, although the OOB prediction error for the model above is still relatively high, RFsp manages to produce more accurate predictions than the `interpolate` function, probably because it does better job in accounting for the local hot-spots. Note also we set `mtry=1` here on purpose low because otherwise importance of the individual 1–2 hotspots would drop significantly.
 
@@ -769,8 +783,8 @@ m.clay
     ## Mtry:                             25 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
-    ## OOB prediction error (MSE):       190.5888 
-    ## R squared (OOB):                  0.2293424
+    ## OOB prediction error (MSE):       186.608 
+    ## R squared (OOB):                  0.2192148
 
 in this case we used inverse measurement variance as `case.weights` so that points that were measured in the lab will receive much higher weights. Final output map below shows that, in this specific case, the model without weights seems to predict somewhat higher values, especially in the extrapolation areas. This indicates that using measurement errors in model calibration is important and one should not avoid specifying this in the model, especially if the training data is significantly heterogeneous.
 
@@ -1018,10 +1032,12 @@ Note from the maps above that some hot spots in the prediction error maps from p
 
 One disadvantage of fitting spatiotemporal models using station data is that the actual accuracy of this models need to be assessed using leave-locations-out cross-validation (Meyer, Reudenbach, Hengl, Katurji, & Nauss, 2018), otherwise ranger might give an overoptimistic estimate of the actual accuracy. This happens because RF learns also from *"location"* so that the realistic estimate of accuracy can often be [significantly lower](https://geocompr.robinlovelace.net/spatial-cv.html#spatial-cv-with-mlr) if this issue is ignored.
 
-In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;1000 point locations (hence &gt;&gt;1000 buffer distance maps) is problably not yet recommended. Also cross-validation of accuracy of predictions produced using RFsp needs to be implemented using leave-location-out CV to account for spatial autocorrelation in data. The key to the success of the RFsp framework might be the training data quality — especially quality of spatial sampling (to minimize extrapolation problems and any type of bias in data), and quality of model validation (to ensure that accuracy is not effected by overfitting). For all other details please refer to [our paper](https://peerj.com/preprints/26693/).
+In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions once the geographical distances are added to the model (see also (Behrens et al., n.d.)). Computing time, however, can be a cumbersome and working with data sets with &gt;&gt;1000 point locations (hence &gt;&gt;1000 buffer distance maps) is problably not yet recommended. Also cross-validation of accuracy of predictions produced using RFsp needs to be implemented using leave-location-out CV to account for spatial autocorrelation in data. The key to the success of the RFsp framework might be the training data quality — especially quality of spatial sampling (to minimize extrapolation problems and any type of bias in data), and quality of model validation (to ensure that accuracy is not effected by overfitting). For all other details please refer to [our paper](https://peerj.com/preprints/26693/).
 
 References
 ----------
+
+Behrens, T., Schmidt, K., Viscarra Rossel, R. A., Gries, P., Scholten, T., & MacMillan, R. A. (n.d.). Spatial modelling with euclidean distance fields and machine learning. *European Journal of Soil Science*, *in press*. doi:[10.1111/ejss.12687](https://doi.org/10.1111/ejss.12687)
 
 Brown, P. E. (2015). Model-based geostatistics the easy way. *Journal of Statistical Software*, *63*(12). Retrieved from <http://www.jstatsoft.org/v63/i12>
 
@@ -1029,13 +1045,15 @@ Diggle, P. J., & Ribeiro Jr, P. J. (2007). *Model-based Geostatistics* (p. 288).
 
 Dubois, G. (Ed.). (2005). *Automatic mapping algorithms for routine and emergency monitoring data* (p. 150). Luxembourg: Office for Official Publications of the European Communities.
 
+Dubois, G., Malczewski, J., & De Cort, M. (2003). *Mapping radioactivity in the environment: Spatial interpolation comparison 97*. Office for Official Publications of the European Communities.
+
 Grossman, J. N., Grosz, A. E., Schweitzer, P. N., & Schruben, P. G. (2004). *The National Geochemical Survey-database and documentation*. USGS Eastern Mineral; Environmental Resources Science Center.
 
 Hengl, T. (2009). *A practical guide to geostatistical mapping*. Amsterdam, the Netherlands: Lulu.
 
 Hijmans, R. J., & Etten, J. van. (2017). *Raster: Geographic data analysis and modeling*. Retrieved from <https://cran.r-project.org/package=raster>
 
-Meinshausen, N. (2006). Quantile regression forests. *Journal of Machine Learning Research*, *7*(Jun), 983–999.
+Meinshausen, N. (2006). Quantile regression forests. *Journal of Machine Learning Research*, *7*, 983–999.
 
 Meyer, H., Reudenbach, C., Hengl, T., Katurji, M., & Nauss, T. (2018). Improving performance of spatio-temporal machine learning models using forward feature selection and target-oriented validation. *Environmental Modelling & Software*, *101*, 1–9. doi:[10.1016/j.envsoft.2017.12.001](https://doi.org/10.1016/j.envsoft.2017.12.001)
 

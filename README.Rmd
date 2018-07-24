@@ -59,6 +59,17 @@ We also load a number of local function prepared for the purpose of this tutoria
 source('./RF_vs_kriging/R/RFsp_functions.R')
 ```
 
+## Data sets in use
+
+This tutorial uses several data sets that are either available from the R packages listed or can be loaded from the `/RF_vs_kriging/data` directory. This is the complete list of data sets used in the tutorial and the scientific paper:
+
+  * Muse data set (sp package): topsoil heavy metal concentrations, along with a number of soil and landscape variables at 155 observation locations;
+  * Swiss rainfall dataset SIC 1997 [@dubois2003mapping] (see folder `./RF_vs_kriging/data/rainfall`): 467 measurements of daily rainfall in Switzerland on the 8th of May 1986;
+  * Ebergötzen data set (plotKML package): 3670 ground observations of soil types and texture by hand,
+  * National Cooperative Soil Survey (NCSS) data set for a sub-area around Carson (see folder `./RF_vs_kriging/data/NRCS`): contains 3418 measurements of clay content in soil;
+  * The National Geochemical Survey data set (see folder `./RF_vs_kriging/data/geochem`): 2858 points with measurements of Pb, Cu, K and Mg covering the US states Illinois and Indiana;
+  * Boulder Colorado daily precipitation (see folder `./RF_vs_kriging/data/st_prec`): 176,467 measurements of daily precipitation for the period 20142017,
+
 ## Spatial prediction 2D continuous variable using buffer distances
 
 If no other information is available, we can use buffer distances to all points as covariates to predict values of some continuous or categorical variable in the RFsp framework. These can be derived with the help of the [raster](https://cran.r-project.org/package=raster) package [@hijmans2014raster]. Consider for example the meuse data set from the [gstat](https://github.com/edzer/gstat) package:
@@ -528,7 +539,7 @@ Note from the maps above that some hot spots in the prediction error maps from p
 
 One disadvantage of fitting spatiotemporal models using station data is that the actual accuracy of this models need to be assessed using leave-locations-out cross-validation [@MEYER20181], otherwise ranger might give an overoptimistic estimate of the actual accuracy. This happens because RF learns also from _"location"_ so that the realistic estimate of accuracy can often be [significantly lower](https://geocompr.robinlovelace.net/spatial-cv.html#spatial-cv-with-mlr) if this issue is ignored. 
 
-In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions. Computing time, however, can be a cumbersome and working with data sets with >>1000 point locations (hence >>1000 buffer distance maps) is problably not yet recommended. Also cross-validation of accuracy of predictions produced using RFsp needs to be implemented using leave-location-out CV to account for spatial autocorrelation in data. The key to the success of the RFsp framework might be the training data quality — especially quality of spatial sampling (to minimize extrapolation problems and any type of bias in data), and quality of model validation (to ensure that accuracy is not effected by overfitting). For all other details please refer to [our paper](https://peerj.com/preprints/26693/).
+In summary, Random Forest seems to be suitable for generating spatial and spatiotemporal predictions once the geographical distances are added to the model (see also [@Behrens2018]). Computing time, however, can be a cumbersome and working with data sets with >>1000 point locations (hence >>1000 buffer distance maps) is problably not yet recommended. Also cross-validation of accuracy of predictions produced using RFsp needs to be implemented using leave-location-out CV to account for spatial autocorrelation in data. The key to the success of the RFsp framework might be the training data quality — especially quality of spatial sampling (to minimize extrapolation problems and any type of bias in data), and quality of model validation (to ensure that accuracy is not effected by overfitting). For all other details please refer to [our paper](https://peerj.com/preprints/26693/).
 
 ## References
 
