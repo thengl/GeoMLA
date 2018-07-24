@@ -65,10 +65,10 @@ This tutorial uses several data sets that are either available from the R packag
 
   * Muse data set (sp package): topsoil heavy metal concentrations, along with a number of soil and landscape variables at 155 observation locations;
   * Swiss rainfall dataset SIC 1997 [@dubois2003mapping] (see folder `./RF_vs_kriging/data/rainfall`): 467 measurements of daily rainfall in Switzerland on the 8th of May 1986;
-  * Ebergötzen data set (plotKML package): 3670 ground observations of soil types and texture by hand,
+  * Ebergötzen data set (plotKML package): 3670 ground observations of soil types and texture by hand;
   * National Cooperative Soil Survey (NCSS) data set for a sub-area around Carson (see folder `./RF_vs_kriging/data/NRCS`): contains 3418 measurements of clay content in soil;
   * The National Geochemical Survey data set (see folder `./RF_vs_kriging/data/geochem`): 2858 points with measurements of Pb, Cu, K and Mg covering the US states Illinois and Indiana;
-  * Boulder Colorado daily precipitation (see folder `./RF_vs_kriging/data/st_prec`): 176,467 measurements of daily precipitation for the period 20142017,
+  * Boulder Colorado daily precipitation (see folder `./RF_vs_kriging/data/st_prec`): 176,467 measurements of daily precipitation for the period 2014–2017;
 
 ## Spatial prediction 2D continuous variable using buffer distances
 
