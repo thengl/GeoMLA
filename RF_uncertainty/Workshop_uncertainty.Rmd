@@ -469,6 +469,31 @@ points(meuse["soil"], pch="+")
 
 This shows that some individual points seem to be problematic as they show high errors for at least 2 classes, and also the lower right corner of the study area is in average the most difficult to map.
 
+## Spatial cross-validation
+
+When fitting spatial prediction models one should try as much as possible to use the so-called [spatial cross-validation](https://mlr-org.github.io/mlr/articles/tutorial/devel/handling_of_spatial_data.html) to estimate a 
+realistic measure of prediction accuracy. The spatial cross-validation can be run by using for example the mlr package:
+
+```{r}
+library(mlr)
+spatial.taskmeuse = makeRegrTask(data = rm.zinc1[,c("zinc","SW_occurrence","dist","AHN")], target = "zinc", coordinates = data.frame(meuse@coords))
+spatial.taskmeuse
+learner.rf = makeLearner("regr.ranger")
+library("parallelMap")
+parallelStartSocket(parallel::detectCores())
+resampling = makeResampleDesc("SpRepCV", fold = 5, reps = 5)
+cv.meuse = mlr::resample(learner = learner.rf, task = spatial.taskmeuse, resampling = resampling)
+## compare with non-spatial CV:
+nonspatial.taskmeuse = makeRegrTask(data = rm.zinc1[,c("zinc","SW_occurrence","dist","AHN")], target = "zinc")
+resampling0 = makeResampleDesc("RepCV", fold = 5, reps = 5)
+cv.meuse0 = mlr::resample(learner = learner.rf, task = nonspatial.taskmeuse, resampling = resampling0)
+parallelStop()
+```
+
+This shows that the non-spatial CV (as expected) will result in about 10% lower RMSE (253 vs 264). 
+The difference between the spatial vs non-spatial CV will likely be more significant if the points are 
+spatially clustered and a strong spatial auto-correlation exists. 
+
 ## Summary points
 
 The uncertainty of the predictions of random forest for regression-type

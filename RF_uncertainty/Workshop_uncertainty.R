@@ -268,3 +268,18 @@ plot(raster(pred.grids["se_soil3"]), col=rev(bpy.colors())[1:80],
      main="prediction error soil type '3' RF", axes=FALSE, box=FALSE, zlim=c(0,.35))
 points(meuse["soil"], pch="+")
 
+## ------------------------------------------------------------------------
+library(mlr)
+spatial.taskmeuse = makeRegrTask(data = rm.zinc1[,c("zinc","SW_occurrence","dist","AHN")], target = "zinc", coordinates = data.frame(meuse@coords))
+spatial.taskmeuse
+learner.rf = makeLearner("regr.ranger")
+library("parallelMap")
+parallelStartSocket(parallel::detectCores())
+resampling = makeResampleDesc("SpRepCV", fold = 5, reps = 5)
+cv.meuse = mlr::resample(learner = learner.rf, task = spatial.taskmeuse, resampling = resampling)
+## compare with non-spatial CV:
+nonspatial.taskmeuse = makeRegrTask(data = rm.zinc1[,c("zinc","SW_occurrence","dist","AHN")], target = "zinc")
+resampling0 = makeResampleDesc("RepCV", fold = 5, reps = 5)
+cv.meuse0 = mlr::resample(learner = learner.rf, task = nonspatial.taskmeuse, resampling = resampling0)
+parallelStop()
+

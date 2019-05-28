@@ -2,42 +2,64 @@ Mapping Prediction Uncertainty using RFsp
 ================
 Hengl, T. and Wright, M.N.
 
--   [Software installation](#software-installation)
--   [Mapping uncertainty using numeric variables and the ranger package:](#mapping-uncertainty-using-numeric-variables-and-the-ranger-package)
--   [Mapping prediction errors for factor/binomial variables:](#mapping-prediction-errors-for-factorbinomial-variables)
--   [Mapping prediction errors for a factor variable:](#mapping-prediction-errors-for-a-factor-variable)
--   [Summary points](#summary-points)
--   [References](#references)
-
 | <a href="https://github.com/thengl"><img src="https://avatars0.githubusercontent.com/u/640722?s=460&v=4" height="100" alt="Tomislav Hengl"></a> | <a href="https://github.com/mnwright"><img src="https://avatars3.githubusercontent.com/u/9598192?s=460&v=4" height="100" alt="Marvin N. Wright"></a> |
-|-------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 
-------------------------------------------------------------------------
+-----
 
 <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank"><img src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" alt=""></a>
 
-------------------------------------------------------------------------
+-----
 
-There is an increasing interest in using Machine Learning techniques for the purpose of generating spatial predictions, and for mining environmental data in general. Machine Learning algorithms, such as random forests, artificial neural networks and support vector machines have already shown predictive potential for various environmental applications (Biau & Scornet, 2016; Nussbaum et al., 2018; Prasad, Iverson, & Liaw, 2006). This tutorial explains how to use Machine Learning to efficiently generate spatial predictions and derive associated uncertainty. Our focus is on using Random Forest as implemented in the [ranger](https://github.com/imbs-hl/ranger) package (Wright & Ziegler, 2017), although similar frameworks could be applied to other tree-based Machine Learning algorithms.
+There is an increasing interest in using Machine Learning techniques for
+the purpose of generating spatial predictions, and for mining
+environmental data in general. Machine Learning algorithms, such as
+random forests, artificial neural networks and support vector machines
+have already shown predictive potential for various environmental
+applications (Biau & Scornet, 2016; Nussbaum et al., 2018; Prasad,
+Iverson, & Liaw, 2006). This tutorial explains how to use Machine
+Learning to efficiently generate spatial predictions and derive
+associated uncertainty. Our focus is on using Random Forest as
+implemented in the [ranger](https://github.com/imbs-hl/ranger) package
+(Wright & Ziegler, 2017), although similar frameworks could be applied
+to other tree-based Machine Learning algorithms.
 
-For a complete overview of methods used please refer to: Hengl, T., Nussbaum, M., Wright, M. and Heuvelink, G.B.M., 2018. [*"Random Forest as a Generic Framework for Predictive Modeling of Spatial and Spatio-temporal Variables"*](https://peerj.com/preprints/26693/), PeerJ (in review).
+For a complete overview of methods used please refer to: Hengl, T.,
+Nussbaum, M., Wright, M. and Heuvelink, G.B.M., 2018. [*“Random Forest
+as a Generic Framework for Predictive Modeling of Spatial and
+Spatio-temporal Variables”*](https://peerj.com/preprints/26693/), PeerJ
+(in review).
 
-Software installation
----------------------
+## Software installation
 
 Software (required):
 
--   [R](http://cran.r-project.org/bin/windows/base/) or [MRO](https///mran.microsoft.com/download/);
+  - [R](http://cran.r-project.org/bin/windows/base/) or
+    [MRO](https///mran.microsoft.com/download/);
 
--   [RStudio](http://www.rstudio.com/products/RStudio/);
+  - [RStudio](http://www.rstudio.com/products/RStudio/);
 
--   R packages: GSIF, plotKML, ranger, caret, plyr, raster, devtools (see: [how to install R package](http://www.r-bloggers.com/installing-r-packages/));
+  - R packages: GSIF, plotKML, ranger, caret, plyr, raster, devtools
+    (see: [how to install R
+    package](http://www.r-bloggers.com/installing-r-packages/));
 
--   [QGIS](https://www.qgis.org/en/site/forusers/download.html) to visualize predictions (add [WMTS](http://gis.sinica.edu.tw/worldmap/wmts) background layers);
+  - [QGIS](https://www.qgis.org/en/site/forusers/download.html) to
+    visualize predictions (add
+    [WMTS](http://gis.sinica.edu.tw/worldmap/wmts) background layers);
 
-R script used in this tutorial you can download from the **[github](https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging/R)**. As a gentle introduction to R programming languange and spatial classes in R we recommend following [the Geocomputation with R book](https://geocompr.robinlovelace.net/). To open any spatial layers in QGIS you will need to use rgdal function `writeGDAL` for rasters or `writeOGR` for vector layers.
+R script used in this tutorial you can download from the
+**[github](https://github.com/thengl/GeoMLA/tree/master/RF_vs_kriging/R)**.
+As a gentle introduction to R programming languange and spatial classes
+in R we recommend following [the Geocomputation with R
+book](https://geocompr.robinlovelace.net/). To open any spatial layers
+in QGIS you will need to use rgdal function `writeGDAL` for rasters or
+`writeOGR` for vector layers.
 
-Quantile regression random forest and derivation of standard errors using Jackknifing is available from ranger version &gt;0.9.4. To run this tutorial it is recommended to install [ranger](https://github.com/imbs-hl/ranger) (Wright & Ziegler, 2017) directly from github:
+Quantile regression random forest and derivation of standard errors
+using Jackknifing is available from ranger version \>0.9.4. To run this
+tutorial it is recommended to install
+[ranger](https://github.com/imbs-hl/ranger) (Wright & Ziegler, 2017)
+directly from github:
 
 ``` r
 devtools::install_github("imbs-hl/ranger")
@@ -49,7 +71,7 @@ Other packages that we use here include:
 library(GSIF)
 ```
 
-    ## GSIF version 0.5-4 (2017-04-25)
+    ## GSIF version 0.5-5 (2019-01-04)
 
     ## URL: http://gsif.r-forge.r-project.org/
 
@@ -59,13 +81,14 @@ library(rgdal)
 
     ## Loading required package: sp
 
-    ## rgdal: version: 1.2-7, (SVN revision 660)
+    ## rgdal: version: 1.4-3, (SVN revision 828)
     ##  Geospatial Data Abstraction Library extensions to R successfully loaded
-    ##  Loaded GDAL runtime: GDAL 2.2.1, released 2017/06/23
-    ##  Path to GDAL shared files: /usr/local/share/gdal
-    ##  Loaded PROJ.4 runtime: Rel. 4.9.2, 08 September 2015, [PJ_VERSION: 492]
+    ##  Loaded GDAL runtime: GDAL 2.2.3, released 2017/11/20
+    ##  Path to GDAL shared files: /usr/share/gdal/2.2
+    ##  GDAL binary built with GEOS: TRUE 
+    ##  Loaded PROJ.4 runtime: Rel. 4.9.3, 15 August 2016, [PJ_VERSION: 493]
     ##  Path to PROJ.4 shared files: (autodetected)
-    ##  Linking to sp version: 1.2-4
+    ##  Linking to sp version: 1.3-1
 
 ``` r
 library(raster)
@@ -77,16 +100,24 @@ leg = c("#0000ff", "#0028d7", "#0050af", "#007986", "#00a15e", "#00ca35",
         "#e5ff00", "#fff200", "#ffca00", "#ffa100", "#ff7900", "#ff5000", "#ff2800", "#ff0000")
 ```
 
-Mapping uncertainty using numeric variables and the ranger package:
--------------------------------------------------------------------
+## Mapping uncertainty using numeric variables and the ranger package
 
-Consider for example the meuse data set from the [gstat](https://github.com/edzer/gstat) package:
+Consider for example the meuse data set from the
+[gstat](https://github.com/edzer/gstat) package:
 
 ``` r
 demo(meuse, echo=FALSE)
 ```
 
-We can use number of covariates to help interpolating Zinc variable. We known from the literature that concentration of metals in soil is controlled by river flooding and carrying upstream sediments (it is assumed that the main source of zinc in this case is the river that occasionally floods the area), hence we can add global surface water occurrence (Pekel, Cottam, Gorelick, & Belward, 2016), the LiDAR-based digital elevation model (<http://ahn.nl>) and LGN (Landelijk Grondgebruiksbestand Nederland) land cover classes, as potential covariates explaining zinc concentration:
+We can use number of covariates to help interpolating Zinc variable. We
+known from the literature that concentration of metals in soil is
+controlled by river flooding and carrying upstream sediments (it is
+assumed that the main source of zinc in this case is the river that
+occasionally floods the area), hence we can add global surface water
+occurrence (Pekel, Cottam, Gorelick, & Belward, 2016), the LiDAR-based
+digital elevation model (<http://ahn.nl>) and LGN (Landelijk
+Grondgebruiksbestand Nederland) land cover classes, as potential
+covariates explaining zinc concentration:
 
 ``` r
 dir.meuse = "../RF_vs_kriging/data/meuse/"
@@ -100,13 +131,18 @@ meuse.grid@data = cbind(meuse.grid@data, data.frame(model.matrix(~LGN5 - 1,
     meuse.grid@data)))
 ```
 
-In addition to the covariate layers, we also derive buffer distances so we can account for the spatial autocorrelation (see the [RFsp tutorial](https://github.com/thengl/GeoMLA)):
+In addition to the covariate layers, we also derive buffer distances so
+we can account for the spatial autocorrelation (see the [RFsp
+tutorial](https://github.com/thengl/GeoMLA)):
 
 ``` r
 grid.dist0 <- GSIF::buffer.dist(meuse["zinc"], meuse.grid[1], as.factor(1:nrow(meuse)))
 ```
 
-which takes few seconds as it generates 155 gridded maps. Now that we have prepared all covariates we can fit a spatial prediction model that includes geographical and process-based covariates:
+which takes few seconds as it generates 155 gridded maps. Now that we
+have prepared all covariates we can fit a spatial prediction model that
+includes geographical and process-based
+covariates:
 
 ``` r
 fm1 <- as.formula(paste("zinc ~ ", paste(names(grid.dist0), collapse="+"), 
@@ -145,7 +181,10 @@ fm1
     ##     dist + LGN51 + LGN52 + LGN53 + LGN54 + LGN55 + LGN56 + LGN59 + 
     ##     LGN511 + LGN516 + LGN518 + LGN519 + LGN520 + LGN523 + LGN526
 
-this is rather long formula since distance to each sampling point is a separate map. Note also that we use land cover classes `LGN*` as indicators. We can now produce a regression matrix and fit a ranger model by using:
+this is rather long formula since distance to each sampling point is a
+separate map. Note also that we use land cover classes `LGN*` as
+indicators. We can now produce a regression matrix and fit a ranger
+model by using:
 
 ``` r
 rm.zinc1 <- do.call(cbind, list(meuse@data["zinc"], 
@@ -153,7 +192,9 @@ rm.zinc1 <- do.call(cbind, list(meuse@data["zinc"],
                              over(meuse["zinc"], grid.dist0)))
 ```
 
-the model shows that this list of predictors accounts for ca 65% of variation in Zinc values based on the Out-of-Bag (OOB) samples (Wright & Ziegler, 2017):
+the model shows that this list of predictors accounts for ca 65% of
+variation in Zinc values based on the Out-of-Bag (OOB) samples (Wright &
+Ziegler, 2017):
 
 ``` r
 m1.zinc <- ranger(fm1, rm.zinc1, mtry=22, num.trees=500, 
@@ -173,12 +214,20 @@ m1.zinc
     ## Mtry:                             22 
     ## Target node size:                 5 
     ## Variable importance mode:         impurity 
+    ## Splitrule:                        variance 
     ## OOB prediction error (MSE):       46956.93 
     ## R squared (OOB):                  0.6515079
 
-Note that we set `quantreg=TRUE` which initiates the Quantile Regression RF approach (Meinshausen, 2006) and helps us estimate also the prediction error variance i.e. prediction intervals.
+Note that we set `quantreg=TRUE` which initiates the Quantile Regression
+RF approach (Meinshausen, 2006) and helps us estimate also the
+prediction error variance i.e. prediction intervals.
 
-Further inspection of the model shows that especially distance to the river and LGN5 class 16, help with predicting zinc concentrations. Nevertheless, it seems that buffer distances are most important for mapping zinc i.e. more important than surface water occurrence, flood frequency, distance to river and elevation for producing the final predictions:
+Further inspection of the model shows that especially distance to the
+river and LGN5 class 16, help with predicting zinc concentrations.
+Nevertheless, it seems that buffer distances are most important for
+mapping zinc i.e. more important than surface water occurrence, flood
+frequency, distance to river and elevation for producing the final
+predictions:
 
 ``` r
 xl <- as.list(ranger::importance(m1.zinc))
@@ -197,7 +246,9 @@ print(t(data.frame(xl[order(unlist(xl), decreasing=TRUE)[1:10]])))
     ## layer.155  344361.8
     ## layer.58   323831.0
 
-We can now predict median value of Zinc and upper and lower 67% probability prediction intervals (which corresponds to $$1 standard deviation):
+We can now predict median value of Zinc and upper and lower 67%
+probability prediction intervals (which corresponds to $$1 standard
+deviation):
 
 ``` r
 pred.zinc.rfq = predict(m1.zinc, 
@@ -211,51 +262,66 @@ str(pred.zinc.rfq)
     ##  $ treetype                 : chr "Regression"
     ##  $ num.independent.variables: num 171
     ##  $ num.trees                : num 500
-    ##  $ predictions              : num [1:3103, 1:3] 640 640 346 335 474 ...
+    ##  $ predictions              : num [1:3103, 1:3] 640 612 281 269 472 ...
     ##   ..- attr(*, "dimnames")=List of 2
     ##   .. ..$ : NULL
     ##   .. ..$ : chr [1:3] "quantile= 0.159" "quantile= 0.5" "quantile= 0.841"
     ##  - attr(*, "class")= chr "ranger.prediction"
 
-where `"quantile= 0.159"` is the lower prediction interval and `"quantile= 0.841"` is the upper prediction interval. For example for prediction location 1 the interval is:
+where `"quantile= 0.159"` is the lower prediction interval and
+`"quantile= 0.841"` is the upper prediction interval. For example for
+prediction location 1 the interval is:
 
 ``` r
 pred.zinc.rfq$predictions[1,]
 ```
 
     ## quantile= 0.159   quantile= 0.5 quantile= 0.841 
-    ##             640            1022            1096
+    ##         640.000        1022.000        1139.295
 
-which shows that the prediction range is relatively wide (note also that the upper and lower prediction intervals are not necessarily symetric!). We can copy the predicted lower and upper intervals to the spatial object so we can also plot values as maps (maps of predictions can be found in this [tutorial](https://github.com/thengl/GeoMLA)):
+which shows that the prediction range is relatively wide (note also that
+the upper and lower prediction intervals are not necessarily
+symetric\!). We can copy the predicted lower and upper intervals to the
+spatial object so we can also plot values as maps (maps of predictions
+can be found in this [tutorial](https://github.com/thengl/GeoMLA)):
 
 ``` r
 meuse.grid$zinc_rfq_U = pred.zinc.rfq$predictions[,3]
 meuse.grid$zinc_rfq_L = pred.zinc.rfq$predictions[,1]
 ```
 
-Assuming normal distribution of errors the 67% probability prediction interval should match 1 s.d. of the prediction error:
+Assuming normal distribution of errors the 67% probability prediction
+interval should match 1 s.d. of the prediction error:
 
-![Histogram of s.d. of the prediction error estimated using QRF.](Workshop_uncertainty_files/figure-markdown_github/rfq-histogram-1.png)
+![Histogram of s.d. of the prediction error estimated using
+QRF.](Workshop_uncertainty_files/figure-gfm/rfq-histogram-1.png)
 
-Compare this numbers with the OOB RMSE and mean s.d. of prediction error:
+Compare this numbers with the OOB RMSE and mean s.d. of prediction
+error:
 
 ``` r
 mean(meuse.grid$zinc_rfq_r, na.rm=TRUE); sqrt(m1.zinc$prediction.error)
 ```
 
-    ## [1] 167.8069
+    ## [1] 165.6473
 
     ## [1] 216.6955
 
-This shows that the mean prediction error is smaller than the OOB RMSE for about 25%, but in general numbers do match.
+This shows that the mean prediction error is smaller than the OOB RMSE
+for about 25%, but in general numbers do match.
 
-An alternative approach to estimating the uncertainty of predictions is the Jackknifing approach approach (Wager, Hastie, & Efron, 2014):
+An alternative approach to estimating the uncertainty of predictions is
+the Jackknifing approach approach (Wager, Hastie, & Efron,
+2014):
 
 ``` r
 m2.zinc <- ranger(fm1, rm.zinc1, mtry=22, num.trees=500, seed=1, keep.inbag=TRUE)
 ```
 
-Here the `keep.inbag=TRUE` initaties the Jackknifing approach, which estimate standard errors of the expected values of predictions, used to construct confidence intervals. The prediction can be generate by using:
+Here the `keep.inbag=TRUE` initaties the Jackknifing approach, which
+estimate standard errors of the expected values of predictions, used to
+construct confidence intervals. The prediction can be generate by
+using:
 
 ``` r
 pred.zinc.rfj = predict(m2.zinc, cbind(meuse.grid@data, grid.dist0@data), type="se")
@@ -268,33 +334,50 @@ str(pred.zinc.rfj)
     ##  $ num.independent.variables: num 171
     ##  $ num.samples              : int 3103
     ##  $ treetype                 : chr "Regression"
-    ##  $ se                       : num [1:3103] 13.7 13.6 13.9 13 13 ...
+    ##  $ se                       : num [1:3103] 13.6 13.5 13.8 12.9 12.9 ...
     ##  - attr(*, "class")= chr "ranger.prediction"
 
-which adds one extra column called `se` i.e. standard errors. If you compare OOB RMSE and mean s.d. of prediction error you will notice that the `se` values are significantly smaller:
+which adds one extra column called `se` i.e. standard errors. If you
+compare OOB RMSE and mean s.d. of prediction error you will notice that
+the `se` values are significantly smaller:
 
 ``` r
 mean(pred.zinc.rfj$se, na.rm=TRUE); sqrt(m2.zinc$prediction.error)
 ```
 
-    ## [1] 33.49803
+    ## [1] 33.41297
 
     ## [1] 216.6955
 
-We can *scale* the values of `se` so they reflect the mean RMSE by using:
+We can *scale* the values of `se` so they reflect the mean RMSE by
+using:
 
 ``` r
 meuse.grid$zinc_rfj_r = pred.zinc.rfj$se * 
     sqrt(m2.zinc$prediction.error)/mean(pred.zinc.rfj$se, na.rm=TRUE)
 ```
 
-If we plot the two maps of errors next to each other we can see relatively similar patterns:
+If we plot the two maps of errors next to each other we can see
+relatively similar patterns:
 
-![Comparison of uncertainty maps based on the QRF vs Jackknife approaches for the Meuse data set.](Workshop_uncertainty_files/figure-markdown_github/jacknife-meuse-maps-1.png)
+![Comparison of uncertainty maps based on the QRF vs Jackknife
+approaches for the Meuse data
+set.](Workshop_uncertainty_files/figure-gfm/jacknife-meuse-maps-1.png)
 
-Note how the single isolated outlier in the lower right corner is depicted by the RFsp prediction error map. This single isolated high value of Zinc in that area RFsp has problem explaining as it does not correlate to any covariates, hence the prediction errors will also be high.
+Note how the single isolated outlier in the lower right corner is
+depicted by the RFsp prediction error map. This single isolated high
+value of Zinc in that area RFsp has problem explaining as it does not
+correlate to any covariates, hence the prediction errors will also be
+high.
 
-Another interesting dataset for comparison of RFsp with linear geostatistical modeling is the Swiss rainfall dataset used in the Spatial Interpolation Comparison (SIC 1997) exercise, described in detail in Dubois, Malczewski, & De Cort (2003). This dataset contains 467 measurements of daily rainfall in Switzerland on the 8th of May 1986. Possible covariates include elevation (DEM) and the long term mean monthly precipitation for May based on the CHELSA climatic images (Karger et al., 2017) at 1 km:
+Another interesting dataset for comparison of RFsp with linear
+geostatistical modeling is the Swiss rainfall dataset used in the
+Spatial Interpolation Comparison (SIC 1997) exercise, described in
+detail in Dubois, Malczewski, & De Cort (2003). This dataset contains
+467 measurements of daily rainfall in Switzerland on the 8th of May
+1986. Possible covariates include elevation (DEM) and the long term mean
+monthly precipitation for May based on the CHELSA climatic images
+(Karger et al., 2017) at 1 km:
 
 ``` r
 sic97.sp = readRDS("../RF_vs_kriging/data/rainfall/sic97.rds")
@@ -302,7 +385,9 @@ swiss1km = readRDS("../RF_vs_kriging/data/rainfall/swiss1km.rds")
 ov2 = over(y=swiss1km, x=sic97.sp)
 ```
 
-We can fit a RFsp model for this data set using the same approach from above. We first derive buffer distances and create the regression matrix:
+We can fit a RFsp model for this data set using the same approach from
+above. We first derive buffer distances and create the regression
+matrix:
 
 ``` r
 swiss.dist0 <- GSIF::buffer.dist(sic97.sp["rainfall"], 
@@ -411,7 +496,8 @@ ov.rain <- over(sic97.sp["rainfall"], swiss1km[1:2])
 sw.rm = do.call(cbind, list(sic97.sp@data["rainfall"], ov.rain, ov.swiss))
 ```
 
-We can next fit a RFsp model by using (previously fine-tuned RF parameters):
+We can next fit a RFsp model by using (previously fine-tuned RF
+parameters):
 
 ``` r
 m1.rain <- ranger(sw.fm1, sw.rm[complete.cases(sw.rm),], mtry=27, 
@@ -432,10 +518,12 @@ m1.rain
     ## Mtry:                             27 
     ## Target node size:                 2 
     ## Variable importance mode:         impurity 
+    ## Splitrule:                        variance 
     ## OOB prediction error (MSE):       2146.155 
     ## R squared (OOB):                  0.8311812
 
-which shows that the model explains 83% of variation in the daily precipitation data. Next we predict values and uncertainty by using:
+which shows that the model explains 83% of variation in the daily
+precipitation data. Next we predict values and uncertainty by using:
 
 ``` r
 rain.rfd1 <- predict(m1.rain, cbind(swiss.dist0@data, swiss1km@data), 
@@ -451,23 +539,40 @@ str(swiss1km@data)
     ##  $ CHELSA_rainfall  : int  84 73 70 69 79 99 105 94 92 83 ...
     ##  $ DEM              : num  401 406 395 395 397 ...
     ##  $ border           : chr  "Switzerland" "Switzerland" "Switzerland" "Switzerland" ...
-    ##  $ rainfall_rfd1    : num  127 127 127 127 127 ...
-    ##  $ rainfall_rfd1_var: num  12.2 12 13 12.7 12 ...
+    ##  $ rainfall_rfd1    : num  127 127 127 127 127 127 129 127 127 126 ...
+    ##  $ rainfall_rfd1_var: num  12.7 12.2 14 12.7 13.3 ...
 
 this finally gives:
 
-![Predictions and prediction errors for the SIC97 data set.](Workshop_uncertainty_files/figure-markdown_github/qrf-sic97-maps-1.png)
+![Predictions and prediction errors for the SIC97 data
+set.](Workshop_uncertainty_files/figure-gfm/qrf-sic97-maps-1.png)
 
-the map on the right shows that there are specific zones where the uncertainty is particulary high. This indicates that the RFsp prediction error maps are potentially more informative than the geostatistical error maps (e.g. UK variance map): it can be used to depict local areas that are significantly more heterogeneous and complex and that require, either, denser sampling networks or covariates that better represent local processes in these areas.
+the map on the right shows that there are specific zones where the
+uncertainty is particulary high. This indicates that the RFsp prediction
+error maps are potentially more informative than the geostatistical
+error maps (e.g. UK variance map): it can be used to depict local areas
+that are significantly more heterogeneous and complex and that require,
+either, denser sampling networks or covariates that better represent
+local processes in these areas.
 
-![figure](../RF_vs_kriging/img/sic97_rainfall_qgis.jpg) *Figure: SIC97 data set predictions based on RFsp visualized in QGIS.*
+![figure](../RF_vs_kriging/img/sic97_rainfall_qgis.jpg) *Figure: SIC97
+data set predictions based on RFsp visualized in QGIS.*
 
-So in summary: uncertainty of predictions in RF models can be efficiently estimated using either the QRF (prediction intervals) or the Jacknifing approaches (confidence intervals), both are available via the the ranger package (Wright & Ziegler, 2017). Prediction intervals should in average match the RMSE estimated using OOB samples or other Cross-validation approaches. Note however that both approaches are computationally intensive and could increase the prediction time at the order of magnitude times. There are additional costs to pay to derive a reliable and detailed measures of uncertainty.
+So in summary: uncertainty of predictions in RF models can be
+efficiently estimated using either the QRF (prediction intervals) or the
+Jacknifing approaches (confidence intervals), both are available via the
+the ranger package (Wright & Ziegler, 2017). Prediction intervals should
+in average match the RMSE estimated using OOB samples or other
+Cross-validation approaches. Note however that both approaches are
+computationally intensive and could increase the prediction time at the
+order of magnitude times. There are additional costs to pay to derive a
+reliable and detailed measures of uncertainty.
 
-Mapping prediction errors for factor/binomial variables:
---------------------------------------------------------
+## Mapping prediction errors for factor/binomial variables
 
-In the next example we look at mapping the uncertainty of predictions of factor/binomial variables. Consider for example the soil type classes in the Meuse data set:
+In the next example we look at mapping the uncertainty of predictions of
+factor/binomial variables. Consider for example the soil type classes in
+the Meuse data set:
 
 ``` r
 summary(meuse$soil)
@@ -476,7 +581,8 @@ summary(meuse$soil)
     ##  1  2  3 
     ## 97 46 12
 
-We can first look at mapping the occurrence of the class `"1"`:
+We can first look at mapping the occurrence of the class
+`"1"`:
 
 ``` r
 meuse@data = cbind(meuse@data, data.frame(model.matrix(~soil-1, meuse@data)))
@@ -488,10 +594,15 @@ summary(as.factor(meuse$soil1))
 
 To produce a map of `soil1` using RFsp we have now two options:
 
--   *Option 1*: treat binomial variable as numeric variable with 0 / 1 values (thus a regression problem),
--   *Option 2*: treat binomial variable as factor variable with a single class (thus a classification problem),
+  - *Option 1*: treat binomial variable as numeric variable with 0 / 1
+    values (thus a regression problem),
+  - *Option 2*: treat binomial variable as factor variable with a single
+    class (thus a classification problem),
 
-Both methods are in fact equivalent and should give the same predictions. There will be however some differences in how are the uncertainty maps estimated. In the case of *Option 1* we fit a similar type of model as in the previous example:
+Both methods are in fact equivalent and should give the same
+predictions. There will be however some differences in how are the
+uncertainty maps estimated. In the case of *Option 1* we fit a similar
+type of model as in the previous example:
 
 ``` r
 fm.s1 = as.formula(paste("soil1 ~ ", 
@@ -536,7 +647,8 @@ rm.s1 <- do.call(cbind, list(meuse@data["soil1"],
                              over(meuse["soil1"], grid.dist0)))
 ```
 
-which gives:
+which
+gives:
 
 ``` r
 m1.s1 <- ranger(fm.s1, rm.s1, mtry=22, num.trees=500, seed = 1, quantreg=TRUE)
@@ -555,10 +667,12 @@ m1.s1
     ## Mtry:                             22 
     ## Target node size:                 5 
     ## Variable importance mode:         none 
+    ## Splitrule:                        variance 
     ## OOB prediction error (MSE):       0.05673872 
     ## R squared (OOB):                  0.7592689
 
-In the case of *Option 2* we treat the binomial variable as factor variable
+In the case of *Option 2* we treat the binomial variable as factor
+variable
 
 ``` r
 rm.s1$soil1c = as.factor(rm.s1$soil1)
@@ -568,7 +682,8 @@ summary(rm.s1$soil1c)
     ##  0  1 
     ## 58 97
 
-and the model turns into a classification problem:
+and the model turns into a classification
+problem:
 
 ``` r
 fm.s1c <- as.formula(paste("soil1c ~ ", paste(names(grid.dist0), collapse="+"), 
@@ -590,9 +705,17 @@ m2.s1
     ## Mtry:                             22 
     ## Target node size:                 10 
     ## Variable importance mode:         none 
-    ## OOB prediction error:             0.05711483
+    ## Splitrule:                        gini 
+    ## OOB prediction error (Brier s.):  0.05711483
 
-which shows that the Out of Bag prediction error (classification error) is only 0.06 (this number is in the probability scale). Note that, it is not easy to compare the results of the regression and classification OOB errors as these are conceptually different. Also note that we turn on `keep.inbag = TRUE` so that ranger can estimate the classification errors using the Jackknife-after-Bootstrap method (Wager et al., 2014). `quantreg=TRUE` obviously would not work here since it is a classification and not a regression problem.
+which shows that the Out of Bag prediction error (classification error)
+is only 0.06 (this number is in the probability scale). Note that, it is
+not easy to compare the results of the regression and classification OOB
+errors as these are conceptually different. Also note that we turn on
+`keep.inbag = TRUE` so that ranger can estimate the classification
+errors using the Jackknife-after-Bootstrap method (Wager et al., 2014).
+`quantreg=TRUE` obviously would not work here since it is a
+classification and not a regression problem.
 
 We next derive prediction errors for the two options:
 
@@ -624,11 +747,13 @@ meuse.grid$soil1_rfq_r = (meuse.grid$soil1_rfq_U - meuse.grid$soil1_rfq_L)/2
 mean(meuse.grid$soil1_rfq_r, na.rm=TRUE); sqrt(m1.s1$prediction.error)
 ```
 
-    ## [1] 0.1183677
+    ## [1] 0.1197154
 
     ## [1] 0.2381989
 
-Again, QRF error estimates are somewhat smaller than the OOB RMSE. We derive the errors also using the Jacknifing approach:
+Again, QRF error estimates are somewhat smaller than the OOB RMSE. We
+derive the errors also using the Jacknifing
+approach:
 
 ``` r
 pred.soil1_rfc = predict(m2.s1, cbind(meuse.grid@data, grid.dist0@data), type="se")
@@ -642,7 +767,9 @@ meuse.grid$soil1_rfc_r = pred.soil1_rfc$se[,2] *
   sqrt(m2.s1$prediction.error)/mean(pred.soil1_rfc$se[,2], na.rm=TRUE)
 ```
 
-We also derive predictions of the binomial variable using the mean estimate (which can be often different from the median estimate!):
+We also derive predictions of the binomial variable using the mean
+estimate (which can be often different from the median
+estimate\!):
 
 ``` r
 pred.regr <- predict(m1.s1, cbind(meuse.grid@data, grid.dist0@data), type="response")$predictions
@@ -651,14 +778,19 @@ meuse.grid$soil1_rfr <- pred.regr
 
 We can finally plot all maps next to each other by using:
 
-![Comparison of uncertainty maps for a binomial variable based on the QRF vs Jackknife approaches for the Meuse data set.](Workshop_uncertainty_files/figure-markdown_github/binomial-meuse-maps-1.png)
+![Comparison of uncertainty maps for a binomial variable based on the
+QRF vs Jackknife approaches for the Meuse data
+set.](Workshop_uncertainty_files/figure-gfm/binomial-meuse-maps-1.png)
 
-Again both approaches to estimating mapping uncertainty give similar patterns: basically transition zones between class 1 and other soil types are most uncertain. Note however that the QRF estimate of the uncertainty (maps on the left) shows much more distinct jumps in values.
+Again both approaches to estimating mapping uncertainty give similar
+patterns: basically transition zones between class 1 and other soil
+types are most uncertain. Note however that the QRF estimate of the
+uncertainty (maps on the left) shows much more distinct jumps in values.
 
-Mapping prediction errors for a factor variable:
-------------------------------------------------
+## Mapping prediction errors for a factor variable
 
-In the last example we look at how to map uncertainty of predicting factor-type variable:
+In the last example we look at how to map uncertainty of predicting
+factor-type variable:
 
 ``` r
 summary(meuse$soil)
@@ -667,7 +799,10 @@ summary(meuse$soil)
     ##  1  2  3 
     ## 97 46 12
 
-which has three classes and hence we treat this variable as a classification problem, which also means that we can now only use the Jacknifing approach:
+which has three classes and hence we treat this variable as a
+classification problem, which also means that we can now only use the
+Jacknifing
+approach:
 
 ``` r
 fm.s = as.formula(paste("soil ~ ", paste(names(grid.dist0), collapse="+"), 
@@ -691,9 +826,12 @@ m.s
     ## Mtry:                             22 
     ## Target node size:                 10 
     ## Variable importance mode:         none 
-    ## OOB prediction error:             0.08903655
+    ## Splitrule:                        gini 
+    ## OOB prediction error (Brier s.):  0.08903655
 
-this shows that the model is succesful with the OOB prediction error of about 0.09. This number is rather abstract so we can also check what is the actual classification accuracy using hard classes:
+this shows that the model is succesful with the OOB prediction error of
+about 0.09. This number is rather abstract so we can also check what is
+the actual classification accuracy using hard classes:
 
 ``` r
 m.s0 <- ranger(fm.s, rm.s, mtry=22, num.trees=150, seed=1)
@@ -712,9 +850,12 @@ m.s0
     ## Mtry:                             22 
     ## Target node size:                 1 
     ## Variable importance mode:         none 
+    ## Splitrule:                        gini 
     ## OOB prediction error:             10.32 %
 
-which shows that the classification or mapping accuracy for hard classes is about 90%. We can produce predictions and uncertainty maps by using:
+which shows that the classification or mapping accuracy for hard classes
+is about 90%. We can produce predictions and uncertainty maps by
+using:
 
 ``` r
 pred.soil_rfc = predict(m.s, cbind(meuse.grid@data, grid.dist0@data), type="se")
@@ -736,56 +877,259 @@ str(pred.grids@data)
     ##  $ pred_soil1: num  0.757 0.759 0.753 0.74 0.765 ...
     ##  $ pred_soil2: num  0.212 0.218 0.22 0.229 0.212 ...
     ##  $ pred_soil3: num  0.0307 0.0232 0.0272 0.0307 0.0232 ...
-    ##  $ se_soil1  : num  0.1008 0.1097 0.1065 0.0944 0.0726 ...
-    ##  $ se_soil2  : num  0.0822 0.0859 0.0841 0.082 0.067 ...
-    ##  $ se_soil3  : num  0.0353 0.0351 0.0352 0.0353 0.0351 ...
+    ##  $ se_soil1  : num  0.1004 0.1093 0.1061 0.0939 0.072 ...
+    ##  $ se_soil2  : num  0.0804 0.0836 0.0821 0.0803 0.0678 ...
+    ##  $ se_soil3  : num  0.0331 0.0329 0.0331 0.0331 0.0329 ...
 
-which gives 6 columns in total: 3 columns for predictions and 3 columns for prediction errors `se`. We can plot the three maps next to each other by using:
+which gives 6 columns in total: 3 columns for predictions and 3 columns
+for prediction errors `se`. We can plot the three maps next to each
+other by using:
 
-![Predictions of soil types for the meuse data set based on the RFsp: (above) probability for three soil classes, and (below) derived standard errors per class.](Workshop_uncertainty_files/figure-markdown_github/factor-meuse-maps-1.png)
+![Predictions of soil types for the meuse data set based on the RFsp:
+(above) probability for three soil classes, and (below) derived standard
+errors per
+class.](Workshop_uncertainty_files/figure-gfm/factor-meuse-maps-1.png)
 
-This shows that some individual points seem to be problematic as they show high errors for at least 2 classes, and also the lower right corner of the study area is in average the most difficult to map.
+This shows that some individual points seem to be problematic as they
+show high errors for at least 2 classes, and also the lower right corner
+of the study area is in average the most difficult to map.
 
-Summary points
---------------
+## Spatial cross-validation
 
-The uncertainty of the predictions of random forest for regression-type problems can be estimated using several approaches:
+When fitting spatial prediction models one should try as much as
+possible to use the so-called [spatial
+cross-validation](https://mlr-org.github.io/mlr/articles/tutorial/devel/handling_of_spatial_data.html)
+to estimate a realistic measure of prediction accuracy. The spatial
+cross-validation can be run by using for example the mlr package:
 
--   The Jackknife-after-Bootstrap method (see e.g. Wager et al. (2014)).
+``` r
+library(mlr)
+```
 
--   The U-statistics approach of Mentch & Hooker (2016).
+    ## Loading required package: ParamHelpers
 
--   The Monte Carlo simulations (both target variable and covariates) approach of Coulston, Blinn, Thomas, & Wynne (2016).
+    ## 
+    ## Attaching package: 'ParamHelpers'
 
--   The Quantile Regression Forests (QRF) method (Meinshausen, 2006).
+    ## The following object is masked from 'package:raster':
+    ## 
+    ##     getValues
 
-The approaches by Wager et al. (2014) and Mentch & Hooker (2016) estimate standard errors of the expected values of predictions, used to construct confidence intervals, while the approaches of Coulston et al. (2016) and Meinshausen (2006) estimate prediction intervals. The Quantile Regression Forests (QRF) algorithm estimates the quantiles of the distribution of the target variable at prediction points. Thus, the 0.025 and 0.975 quantile may be used to derive the lower and upper limits of a symmetric prediction interval.
+    ## 
+    ## Attaching package: 'mlr'
 
-In summary: spatial prediction of uncertainty for numeric, binomial and factor-type variables is straight forward with ranger: buffer distance and spatial-autocorrelation can be incorporated at once. Compare with geostatistical packages where GLMs with logit link function and/or indicator kriging would need to be used, and which requires that variograms are fitted per class.
+    ## The following object is masked from 'package:raster':
+    ## 
+    ##     resample
 
-The QRF and Jacknifing approaches give about similar predictions of the uncertainty (similar patterns) but refer to different scales. The QRF approach seems to be somewhat more attractive as it can be used to produce whole distributions of prediction errors (by setting the `quantiles` argument). One should also be careful about the difference between estimating median and mean values (they can often be different!). Also, both the QRF and the Jacknifing approaches can be computational and increase the computational load by order of mangitude, hence plan carefully your analysis and prediction with larger data sets.
+``` r
+spatial.taskmeuse = makeRegrTask(data = rm.zinc1[,c("zinc","SW_occurrence","dist","AHN")], target = "zinc", coordinates = data.frame(meuse@coords))
+spatial.taskmeuse
+```
 
-References
-----------
+    ## Supervised task: rm.zinc1[, c("zinc", "SW_occurrence", "dist", "AHN")]
+    ## Type: regr
+    ## Target: zinc
+    ## Observations: 155
+    ## Features:
+    ##    numerics     factors     ordered functionals 
+    ##           3           0           0           0 
+    ## Missings: FALSE
+    ## Has weights: FALSE
+    ## Has blocking: FALSE
+    ## Has coordinates: TRUE
 
-Biau, G., & Scornet, E. (2016). A random forest guided tour. *TEST*, *25*(2), 197–227. doi:[10.1007/s11749-016-0481-7](https://doi.org/10.1007/s11749-016-0481-7)
+``` r
+learner.rf = makeLearner("regr.ranger")
+library("parallelMap")
+parallelStartSocket(parallel::detectCores())
+```
 
-Coulston, J. W., Blinn, C. E., Thomas, V. A., & Wynne, R. H. (2016). Approximating prediction uncertainty for random forest regression models. *Photogrammetric Engineering & Remote Sensing*, *82*(3), 189–197. doi:[10.14358/PERS.82.3.189](https://doi.org/10.14358/PERS.82.3.189)
+    ## Starting parallelization in mode=socket with cpus=8.
 
-Dubois, G., Malczewski, J., & De Cort, M. (2003). *Mapping radioactivity in the environment: Spatial interpolation comparison 97*. Office for Official Publications of the European Communities.
+``` r
+resampling = makeResampleDesc("SpRepCV", fold = 5, reps = 5)
+cv.meuse = mlr::resample(learner = learner.rf, task = spatial.taskmeuse, resampling = resampling)
+```
 
-Karger, D. N., Conrad, O., Böhner, J., Kawohl, T., Kreft, H., Soria-Auza, R. W., … Kessler, M. (2017). Climatologies at high resolution for the earth’s land surface areas. *Scientific Data*, *4*.
+    ## Exporting objects to slaves for mode socket: .mlr.slave.options
 
-Meinshausen, N. (2006). Quantile regression forests. *Journal of Machine Learning Research*, *7*, 983–999.
+    ## Resampling: repeated spatial cross-validation
 
-Mentch, L., & Hooker, G. (2016). Quantifying uncertainty in random forests via confidence intervals and hypothesis tests. *Journal of Machine Learning Research*, *17*(1), 841–881.
+    ## Measures:             mse
 
-Nussbaum, M., Spiess, K., Baltensweiler, A., Grob, U., Keller, A., Greiner, L., … Papritz, A. (2018). Evaluation of digital soil mapping approaches with large sets of environmental covariates. *Soil*, *4*(1), 1.
+    ## Mapping in parallel: mode = socket; cpus = 8; elements = 25.
 
-Pekel, J.-F., Cottam, A., Gorelick, N., & Belward, A. S. (2016). High-resolution mapping of global surface water and its long-term changes. *Nature*, *504*, 418–422.
+    ## 
 
-Prasad, A. M., Iverson, L. R., & Liaw, A. (2006). Newer classification and regression tree techniques: Bagging and random forests for ecological prediction. *Ecosystems*, *9*(2), 181–199.
+    ## Aggregated Result: mse.test.mean=73347.5505395
 
-Wager, S., Hastie, T., & Efron, B. (2014). Confidence intervals for random forests: The jackknife and the infinitesimal jackknife. *Journal of Machine Learning Research*, *15*(1), 1625–1651.
+    ## 
 
-Wright, M. N., & Ziegler, A. (2017). ranger: A Fast Implementation of Random Forests for High Dimensional Data in C++ and R. *Journal of Statistical Software*, *77*(1), 1–17.
+``` r
+## compare with non-spatial CV:
+nonspatial.taskmeuse = makeRegrTask(data = rm.zinc1[,c("zinc","SW_occurrence","dist","AHN")], target = "zinc")
+resampling0 = makeResampleDesc("RepCV", fold = 5, reps = 5)
+cv.meuse0 = mlr::resample(learner = learner.rf, task = nonspatial.taskmeuse, resampling = resampling0)
+```
+
+    ## Exporting objects to slaves for mode socket: .mlr.slave.options
+
+    ## Resampling: repeated cross-validation
+
+    ## Measures:             mse
+
+    ## Mapping in parallel: mode = socket; cpus = 8; elements = 25.
+
+    ## 
+
+    ## Aggregated Result: mse.test.mean=63021.7024207
+
+    ## 
+
+``` r
+parallelStop()
+```
+
+    ## Stopped parallelization. All cleaned up.
+
+This shows that the non-spatial CV (as expected) will result in about
+10% lower RMSE (253 vs 264). The difference between the spatial vs
+non-spatial CV will likely be more significant if the points are
+spatially clustered and a strong spatial auto-correlation exists.
+
+## Summary points
+
+The uncertainty of the predictions of random forest for regression-type
+problems can be estimated using several approaches:
+
+  - The Jackknife-after-Bootstrap method (see e.g. Wager et al. (2014)).
+
+  - The U-statistics approach of Mentch & Hooker (2016).
+
+  - The Monte Carlo simulations (both target variable and covariates)
+    approach of Coulston, Blinn, Thomas, & Wynne (2016).
+
+  - The Quantile Regression Forests (QRF) method (Meinshausen, 2006).
+
+The approaches by Wager et al. (2014) and Mentch & Hooker (2016)
+estimate standard errors of the expected values of predictions, used to
+construct confidence intervals, while the approaches of Coulston et al.
+(2016) and Meinshausen (2006) estimate prediction intervals. The
+Quantile Regression Forests (QRF) algorithm estimates the quantiles of
+the distribution of the target variable at prediction points. Thus, the
+0.025 and 0.975 quantile may be used to derive the lower and upper
+limits of a symmetric prediction interval.
+
+In summary: spatial prediction of uncertainty for numeric, binomial and
+factor-type variables is straight forward with ranger: buffer distance
+and spatial-autocorrelation can be incorporated at once. Compare with
+geostatistical packages where GLMs with logit link function and/or
+indicator kriging would need to be used, and which requires that
+variograms are fitted per class.
+
+The QRF and Jacknifing approaches give about similar predictions of the
+uncertainty (similar patterns) but refer to different scales. The QRF
+approach seems to be somewhat more attractive as it can be used to
+produce whole distributions of prediction errors (by setting the
+`quantiles` argument). One should also be careful about the difference
+between estimating median and mean values (they can often be
+different\!). Also, both the QRF and the Jacknifing approaches can be
+computational and increase the computational load by order of mangitude,
+hence plan carefully your analysis and prediction with larger data sets.
+
+## References
+
+<div id="refs" class="references">
+
+<div id="ref-Biau2016">
+
+Biau, G., & Scornet, E. (2016). A random forest guided tour. *TEST*,
+*25*(2), 197–227.
+doi:[10.1007/s11749-016-0481-7](https://doi.org/10.1007/s11749-016-0481-7)
+
+</div>
+
+<div id="ref-COULSTON2016189">
+
+Coulston, J. W., Blinn, C. E., Thomas, V. A., & Wynne, R. H. (2016).
+Approximating prediction uncertainty for random forest regression
+models. *Photogrammetric Engineering & Remote Sensing*, *82*(3),
+189–197.
+doi:[10.14358/PERS.82.3.189](https://doi.org/10.14358/PERS.82.3.189)
+
+</div>
+
+<div id="ref-dubois2003mapping">
+
+Dubois, G., Malczewski, J., & De Cort, M. (2003). *Mapping Radioactivity
+in the Environment: Spatial Interpolation Comparison 97*. Office for
+Official Publications of the European Communities.
+
+</div>
+
+<div id="ref-karger2017climatologies">
+
+Karger, D. N., Conrad, O., Böhner, J., Kawohl, T., Kreft, H.,
+Soria-Auza, R. W., … Kessler, M. (2017). Climatologies at high
+resolution for the earth’s land surface areas. *Scientific Data*, *4*.
+
+</div>
+
+<div id="ref-meinshausen2006quantile">
+
+Meinshausen, N. (2006). Quantile regression forests. *Journal of Machine
+Learning Research*, *7*, 983–999.
+
+</div>
+
+<div id="ref-mentch2016quantifying">
+
+Mentch, L., & Hooker, G. (2016). Quantifying uncertainty in random
+forests via confidence intervals and hypothesis tests. *Journal of
+Machine Learning Research*, *17*(1), 841–881.
+
+</div>
+
+<div id="ref-nussbaum2018evaluation">
+
+Nussbaum, M., Spiess, K., Baltensweiler, A., Grob, U., Keller, A.,
+Greiner, L., … Papritz, A. (2018). Evaluation of digital soil mapping
+approaches with large sets of environmental covariates. *Soil*, *4*(1),
+1.
+
+</div>
+
+<div id="ref-pekel2016high">
+
+Pekel, J.-F., Cottam, A., Gorelick, N., & Belward, A. S. (2016).
+High-resolution mapping of global surface water and its long-term
+changes. *Nature*, *504*, 418–422.
+
+</div>
+
+<div id="ref-prasad2006newer">
+
+Prasad, A. M., Iverson, L. R., & Liaw, A. (2006). Newer classification
+and regression tree techniques: Bagging and random forests for
+ecological prediction. *Ecosystems*, *9*(2), 181–199.
+
+</div>
+
+<div id="ref-wager2014confidence">
+
+Wager, S., Hastie, T., & Efron, B. (2014). Confidence intervals for
+random forests: The jackknife and the infinitesimal jackknife. *Journal
+of Machine Learning Research*, *15*(1), 1625–1651.
+
+</div>
+
+<div id="ref-wright2017ranger">
+
+Wright, M. N., & Ziegler, A. (2017). ranger: A Fast Implementation of
+Random Forests for High Dimensional Data in C++ and R. *Journal of
+Statistical Software*, *77*(1), 1–17.
+
+</div>
+
+</div>
